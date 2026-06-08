@@ -1,0 +1,1125 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{braket}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{hyperref}
+
+\title{Schur-Weyl CG Coefficients for Isospin Space Decomposition}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+This appendix lists the linear combinations of charge basis states
+$\ket{m_1,\ldots,m_N}$ that form states with definite total isospin $J$,
+isospin projection $M$, and permutation group representation $[\kappa]$.
+The coefficients follow the Yamanouchi orthogonal representation for $S_N$
+and the Condon-Shortley phase convention for $\mathrm{SU}(2)$ lowering.
+
+The index $a$ labels the basis vector within the $S_N$ irrep $[\kappa]$
+in the Yamanouchi orthogonal representation. All states are normalized:
+$\sum |c|^2 = 1$.
+
+\subsection*{$N=2,\; j=\frac{1}{2}$}
+
+The Hilbert space dimension is $(2\times \frac{1}{2} +1)^{2}=4$.
+The Schur-Weyl decomposition is:
+\begin{itemize}
+  \item $J=1$: $[2]$ (1, $\dim = 1$)
+  \item $J=0$: $[1,1]$ (1, $\dim = 1$)
+\end{itemize}
+
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[2],\,a=1} = \; &\ket{\frac{1}{2},\frac{1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[2],\,a=1} = \; &\frac{1}{\sqrt{2}} \ket{\frac{-1}{2},\frac{1}{2}} + \frac{1}{\sqrt{2}} \ket{\frac{1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[2],\,a=1} = \; &\ket{\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=0,\,M=0,\,[1,1],\,a=1} = \; &- \frac{1}{\sqrt{2}} \ket{\frac{-1}{2},\frac{1}{2}} + \frac{1}{\sqrt{2}} \ket{\frac{1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\subsection*{$N=3,\; j=\frac{1}{2}$}
+
+The Hilbert space dimension is $(2\times \frac{1}{2} +1)^{3}=8$.
+The Schur-Weyl decomposition is:
+\begin{itemize}
+  \item $J=\frac{3}{2}$: $[3]$ (1, $\dim = 1$)
+  \item $J=\frac{1}{2}$: $[2,1]$ (1, $\dim = 2$)
+\end{itemize}
+
+\begin{equation*}
+\begin{aligned}
+\ket{J=\frac{3}{2},\,M=\frac{3}{2},\,[3],\,a=1} = \; &\ket{\frac{1}{2},\frac{1}{2},\frac{1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=\frac{3}{2},\,M=\frac{1}{2},\,[3],\,a=1} = \; &\frac{1}{\sqrt{3}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2}} + \frac{1}{\sqrt{3}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{\sqrt{3}} \ket{\frac{1}{2},\frac{1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=\frac{3}{2},\,M=\frac{-1}{2},\,[3],\,a=1} = \; &\frac{1}{\sqrt{3}} \ket{\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{\sqrt{3}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{\sqrt{3}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=\frac{3}{2},\,M=\frac{-3}{2},\,[3],\,a=1} = \; &\ket{\frac{-1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=\frac{1}{2},\,M=\frac{1}{2},\,[2,1],\,a=1} = \; &\frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2}} - \sqrt{\frac{2}{3}} \ket{\frac{1}{2},\frac{1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=\frac{1}{2},\,M=\frac{1}{2},\,[2,1],\,a=2} = \; &\frac{1}{\sqrt{2}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2}} - \frac{1}{\sqrt{2}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=\frac{1}{2},\,M=\frac{-1}{2},\,[2,1],\,a=1} = \; &\sqrt{\frac{2}{3}} \ket{\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} - \frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} - \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=\frac{1}{2},\,M=\frac{-1}{2},\,[2,1],\,a=2} = \; &\frac{1}{\sqrt{2}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} - \frac{1}{\sqrt{2}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\subsection*{$N=4,\; j=\frac{1}{2}$}
+
+The Hilbert space dimension is $(2\times \frac{1}{2} +1)^{4}=16$.
+The Schur-Weyl decomposition is:
+\begin{itemize}
+  \item $J=2$: $[4]$ (1, $\dim = 1$)
+  \item $J=1$: $[3,1]$ (1, $\dim = 3$)
+  \item $J=0$: $[2,2]$ (1, $\dim = 2$)
+\end{itemize}
+
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[4],\,a=1} = \; &\ket{\frac{1}{2},\frac{1}{2},\frac{1}{2},\frac{1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[4],\,a=1} = \; &\frac{1}{2} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{1}{2}} + \frac{1}{2} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{1}{2}} + \frac{1}{2} \ket{\frac{1}{2},\frac{1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{2} \ket{\frac{1}{2},\frac{1}{2},\frac{1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[4],\,a=1} = \; &\frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{-1}{2},\frac{1}{2},\frac{1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[4],\,a=1} = \; &\frac{1}{2} \ket{\frac{-1}{2},\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{2} \ket{\frac{-1}{2},\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{2} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{-1}{2}} + \frac{1}{2} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[4],\,a=1} = \; &\ket{\frac{-1}{2},\frac{-1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[3,1],\,a=1} = \; &- \frac{1}{2\sqrt{3}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{1}{2}} - \frac{1}{2\sqrt{3}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{1}{2}} - \frac{1}{2\sqrt{3}} \ket{\frac{1}{2},\frac{1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{\sqrt{3}}{2} \ket{\frac{1}{2},\frac{1}{2},\frac{1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[3,1],\,a=2} = \; &- \frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{1}{2}} - \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{1}{2}} + \sqrt{\frac{2}{3}} \ket{\frac{1}{2},\frac{1}{2},\frac{-1}{2},\frac{1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[3,1],\,a=3} = \; &- \frac{1}{\sqrt{2}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{1}{2}} + \frac{1}{\sqrt{2}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[3,1],\,a=1} = \; &- \frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{-1}{2},\frac{1}{2},\frac{1}{2}} - \frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{-1}{2}} - \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[3,1],\,a=2} = \; &- \frac{1}{\sqrt{3}} \ket{\frac{-1}{2},\frac{-1}{2},\frac{1}{2},\frac{1}{2}} + \frac{1}{2\sqrt{3}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{1}{2}} - \frac{1}{2\sqrt{3}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{2\sqrt{3}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} - \frac{1}{2\sqrt{3}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{\sqrt{3}} \ket{\frac{1}{2},\frac{1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[3,1],\,a=3} = \; &- \frac{1}{2} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{1}{2}} - \frac{1}{2} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{2} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{2} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[3,1],\,a=1} = \; &- \frac{\sqrt{3}}{2} \ket{\frac{-1}{2},\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{2\sqrt{3}} \ket{\frac{-1}{2},\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{2\sqrt{3}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{-1}{2}} + \frac{1}{2\sqrt{3}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[3,1],\,a=2} = \; &- \sqrt{\frac{2}{3}} \ket{\frac{-1}{2},\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{-1}{2}} + \frac{1}{\sqrt{6}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[3,1],\,a=3} = \; &- \frac{1}{\sqrt{2}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{-1}{2}} + \frac{1}{\sqrt{2}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=0,\,M=0,\,[2,2],\,a=1} = \; &\frac{1}{\sqrt{3}} \ket{\frac{-1}{2},\frac{-1}{2},\frac{1}{2},\frac{1}{2}} - \frac{1}{2\sqrt{3}} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{1}{2}} - \frac{1}{2\sqrt{3}} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{-1}{2}} - \frac{1}{2\sqrt{3}} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} - \frac{1}{2\sqrt{3}} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{-1}{2}} + \frac{1}{\sqrt{3}} \ket{\frac{1}{2},\frac{1}{2},\frac{-1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=0,\,M=0,\,[2,2],\,a=2} = \; &\frac{1}{2} \ket{\frac{-1}{2},\frac{1}{2},\frac{-1}{2},\frac{1}{2}} - \frac{1}{2} \ket{\frac{-1}{2},\frac{1}{2},\frac{1}{2},\frac{-1}{2}} - \frac{1}{2} \ket{\frac{1}{2},\frac{-1}{2},\frac{-1}{2},\frac{1}{2}} + \frac{1}{2} \ket{\frac{1}{2},\frac{-1}{2},\frac{1}{2},\frac{-1}{2}}
+\end{aligned}
+\end{equation*}
+\subsection*{$N=2,\; j=1$}
+
+The Hilbert space dimension is $(2\times 1 +1)^{2}=9$.
+The Schur-Weyl decomposition is:
+\begin{itemize}
+  \item $J=2$: $[2]$ (1, $\dim = 1$)
+  \item $J=1$: $[1,1]$ (1, $\dim = 1$)
+  \item $J=0$: $[2]$ (1, $\dim = 1$)
+\end{itemize}
+
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[2],\,a=1} = \; &\ket{1,1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[2],\,a=1} = \; &\frac{1}{\sqrt{2}} \ket{0,1} + \frac{1}{\sqrt{2}} \ket{1,0}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[2],\,a=1} = \; &\frac{1}{\sqrt{6}} \ket{-1,1} + \sqrt{\frac{2}{3}} \ket{0,0} + \frac{1}{\sqrt{6}} \ket{1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[2],\,a=1} = \; &\frac{1}{\sqrt{2}} \ket{-1,0} + \frac{1}{\sqrt{2}} \ket{0,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[2],\,a=1} = \; &\ket{-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[1,1],\,a=1} = \; &\frac{1}{\sqrt{2}} \ket{0,1} - \frac{1}{\sqrt{2}} \ket{1,0}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[1,1],\,a=1} = \; &\frac{1}{\sqrt{2}} \ket{-1,1} - \frac{1}{\sqrt{2}} \ket{1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[1,1],\,a=1} = \; &\frac{1}{\sqrt{2}} \ket{-1,0} - \frac{1}{\sqrt{2}} \ket{0,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=0,\,M=0,\,[2],\,a=1} = \; &- \frac{1}{\sqrt{3}} \ket{-1,1} + \frac{1}{\sqrt{3}} \ket{0,0} - \frac{1}{\sqrt{3}} \ket{1,-1}
+\end{aligned}
+\end{equation*}
+\subsection*{$N=3,\; j=1$}
+
+The Hilbert space dimension is $(2\times 1 +1)^{3}=27$.
+The Schur-Weyl decomposition is:
+\begin{itemize}
+  \item $J=3$: $[3]$ (1, $\dim = 1$)
+  \item $J=2$: $[2,1]$ (1, $\dim = 2$)
+  \item $J=1$: $[3] \oplus [2,1]$ (1+1=2, $\dim = 1+2=3$)
+  \item $J=0$: $[1,1,1]$ (1, $\dim = 1$)
+\end{itemize}
+
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=3,\,[3],\,a=1} = \; &- \ket{1,1,1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=2,\,[3],\,a=1} = \; &- \frac{1}{\sqrt{3}} \ket{0,1,1} - \frac{1}{\sqrt{3}} \ket{1,0,1} - \frac{1}{\sqrt{3}} \ket{1,1,0}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=1,\,[3],\,a=1} = \; &- \frac{1}{\sqrt{15}} \ket{-1,1,1} - \frac{2}{\sqrt{15}} \ket{0,0,1} - \frac{2}{\sqrt{15}} \ket{0,1,0} - \frac{1}{\sqrt{15}} \ket{1,-1,1} - \frac{2}{\sqrt{15}} \ket{1,0,0} - \frac{1}{\sqrt{15}} \ket{1,1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=0,\,[3],\,a=1} = \; &- \frac{1}{\sqrt{10}} \ket{-1,0,1} - \frac{1}{\sqrt{10}} \ket{-1,1,0} - \frac{1}{\sqrt{10}} \ket{0,-1,1} - \sqrt{\frac{2}{5}} \ket{0,0,0} - \frac{1}{\sqrt{10}} \ket{0,1,-1} - \frac{1}{\sqrt{10}} \ket{1,-1,0} - \frac{1}{\sqrt{10}} \ket{1,0,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-1,\,[3],\,a=1} = \; &- \frac{1}{\sqrt{15}} \ket{-1,-1,1} - \frac{2}{\sqrt{15}} \ket{-1,0,0} - \frac{1}{\sqrt{15}} \ket{-1,1,-1} - \frac{2}{\sqrt{15}} \ket{0,-1,0} - \frac{2}{\sqrt{15}} \ket{0,0,-1} - \frac{1}{\sqrt{15}} \ket{1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-2,\,[3],\,a=1} = \; &- \frac{1}{\sqrt{3}} \ket{-1,-1,0} - \frac{1}{\sqrt{3}} \ket{-1,0,-1} - \frac{1}{\sqrt{3}} \ket{0,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-3,\,[3],\,a=1} = \; &- \ket{-1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[2,1],\,a=1} = \; &- \frac{1}{\sqrt{6}} \ket{0,1,1} - \frac{1}{\sqrt{6}} \ket{1,0,1} + \sqrt{\frac{2}{3}} \ket{1,1,0}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[2,1],\,a=2} = \; &- \frac{1}{\sqrt{2}} \ket{0,1,1} + \frac{1}{\sqrt{2}} \ket{1,0,1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[2,1],\,a=1} = \; &- \frac{1}{2\sqrt{3}} \ket{-1,1,1} - \frac{1}{\sqrt{3}} \ket{0,0,1} + \frac{1}{2\sqrt{3}} \ket{0,1,0} - \frac{1}{2\sqrt{3}} \ket{1,-1,1} + \frac{1}{2\sqrt{3}} \ket{1,0,0} + \frac{1}{\sqrt{3}} \ket{1,1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[2,1],\,a=2} = \; &- \frac{1}{2} \ket{-1,1,1} - \frac{1}{2} \ket{0,1,0} + \frac{1}{2} \ket{1,-1,1} + \frac{1}{2} \ket{1,0,0}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[2,1],\,a=1} = \; &- \frac{1}{2} \ket{-1,0,1} - \frac{1}{2} \ket{0,-1,1} + \frac{1}{2} \ket{0,1,-1} + \frac{1}{2} \ket{1,0,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[2,1],\,a=2} = \; &- \frac{1}{2\sqrt{3}} \ket{-1,0,1} - \frac{1}{\sqrt{3}} \ket{-1,1,0} + \frac{1}{2\sqrt{3}} \ket{0,-1,1} - \frac{1}{2\sqrt{3}} \ket{0,1,-1} + \frac{1}{\sqrt{3}} \ket{1,-1,0} + \frac{1}{2\sqrt{3}} \ket{1,0,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[2,1],\,a=1} = \; &- \frac{1}{\sqrt{3}} \ket{-1,-1,1} - \frac{1}{2\sqrt{3}} \ket{-1,0,0} + \frac{1}{2\sqrt{3}} \ket{-1,1,-1} - \frac{1}{2\sqrt{3}} \ket{0,-1,0} + \frac{1}{\sqrt{3}} \ket{0,0,-1} + \frac{1}{2\sqrt{3}} \ket{1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[2,1],\,a=2} = \; &- \frac{1}{2} \ket{-1,0,0} - \frac{1}{2} \ket{-1,1,-1} + \frac{1}{2} \ket{0,-1,0} + \frac{1}{2} \ket{1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[2,1],\,a=1} = \; &- \sqrt{\frac{2}{3}} \ket{-1,-1,0} + \frac{1}{\sqrt{6}} \ket{-1,0,-1} + \frac{1}{\sqrt{6}} \ket{0,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[2,1],\,a=2} = \; &- \frac{1}{\sqrt{2}} \ket{-1,0,-1} + \frac{1}{\sqrt{2}} \ket{0,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[3],\,a=1} = \; &- \frac{2}{\sqrt{15}} \ket{-1,1,1} + \frac{1}{\sqrt{15}} \ket{0,0,1} + \frac{1}{\sqrt{15}} \ket{0,1,0} - \frac{2}{\sqrt{15}} \ket{1,-1,1} + \frac{1}{\sqrt{15}} \ket{1,0,0} - \frac{2}{\sqrt{15}} \ket{1,1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[3],\,a=1} = \; &- \frac{1}{\sqrt{15}} \ket{-1,0,1} - \frac{1}{\sqrt{15}} \ket{-1,1,0} - \frac{1}{\sqrt{15}} \ket{0,-1,1} + \sqrt{\frac{3}{5}} \ket{0,0,0} - \frac{1}{\sqrt{15}} \ket{0,1,-1} - \frac{1}{\sqrt{15}} \ket{1,-1,0} - \frac{1}{\sqrt{15}} \ket{1,0,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[3],\,a=1} = \; &- \frac{2}{\sqrt{15}} \ket{-1,-1,1} + \frac{1}{\sqrt{15}} \ket{-1,0,0} - \frac{2}{\sqrt{15}} \ket{-1,1,-1} + \frac{1}{\sqrt{15}} \ket{0,-1,0} + \frac{1}{\sqrt{15}} \ket{0,0,-1} - \frac{2}{\sqrt{15}} \ket{1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[2,1],\,a=1} = \; &- \frac{1}{2\sqrt{3}} \ket{-1,1,1} + \frac{1}{\sqrt{3}} \ket{0,0,1} - \frac{1}{2\sqrt{3}} \ket{0,1,0} - \frac{1}{2\sqrt{3}} \ket{1,-1,1} - \frac{1}{2\sqrt{3}} \ket{1,0,0} + \frac{1}{\sqrt{3}} \ket{1,1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[2,1],\,a=2} = \; &- \frac{1}{2} \ket{-1,1,1} + \frac{1}{2} \ket{0,1,0} + \frac{1}{2} \ket{1,-1,1} - \frac{1}{2} \ket{1,0,0}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[2,1],\,a=1} = \; &\frac{1}{2\sqrt{3}} \ket{-1,0,1} - \frac{1}{\sqrt{3}} \ket{-1,1,0} + \frac{1}{2\sqrt{3}} \ket{0,-1,1} + \frac{1}{2\sqrt{3}} \ket{0,1,-1} - \frac{1}{\sqrt{3}} \ket{1,-1,0} + \frac{1}{2\sqrt{3}} \ket{1,0,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[2,1],\,a=2} = \; &- \frac{1}{2} \ket{-1,0,1} + \frac{1}{2} \ket{0,-1,1} + \frac{1}{2} \ket{0,1,-1} - \frac{1}{2} \ket{1,0,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[2,1],\,a=1} = \; &\frac{1}{\sqrt{3}} \ket{-1,-1,1} - \frac{1}{2\sqrt{3}} \ket{-1,0,0} - \frac{1}{2\sqrt{3}} \ket{-1,1,-1} - \frac{1}{2\sqrt{3}} \ket{0,-1,0} + \frac{1}{\sqrt{3}} \ket{0,0,-1} - \frac{1}{2\sqrt{3}} \ket{1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[2,1],\,a=2} = \; &- \frac{1}{2} \ket{-1,0,0} + \frac{1}{2} \ket{-1,1,-1} + \frac{1}{2} \ket{0,-1,0} - \frac{1}{2} \ket{1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=0,\,M=0,\,[1,1,1],\,a=1} = \; &\frac{1}{\sqrt{6}} \ket{-1,0,1} - \frac{1}{\sqrt{6}} \ket{-1,1,0} - \frac{1}{\sqrt{6}} \ket{0,-1,1} + \frac{1}{\sqrt{6}} \ket{0,1,-1} + \frac{1}{\sqrt{6}} \ket{1,-1,0} - \frac{1}{\sqrt{6}} \ket{1,0,-1}
+\end{aligned}
+\end{equation*}
+\subsection*{$N=4,\; j=1$}
+
+The Hilbert space dimension is $(2\times 1 +1)^{4}=81$.
+The Schur-Weyl decomposition is:
+\begin{itemize}
+  \item $J=4$: $[4]$ (1, $\dim = 1$)
+  \item $J=3$: $[3,1]$ (1, $\dim = 3$)
+  \item $J=2$: $[4] \oplus [3,1] \oplus [2,2]$ (1+1+1=3, $\dim = 1+3+2=6$)
+  \item $J=1$: $[3,1] \oplus [2,1,1]$ (1+1=2, $\dim = 3+3=6$)
+  \item $J=0$: $[4] \oplus [2,2]$ (1+1=2, $\dim = 1+2=3$)
+\end{itemize}
+
+\begin{equation*}
+\begin{aligned}
+\ket{J=4,\,M=4,\,[4],\,a=1} = \; &\ket{1,1,1,1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=4,\,M=3,\,[4],\,a=1} = \; &\frac{1}{2} \ket{0,1,1,1} + \frac{1}{2} \ket{1,0,1,1} + \frac{1}{2} \ket{1,1,0,1} + \frac{1}{2} \ket{1,1,1,0}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=4,\,M=2,\,[4],\,a=1} = \; &\frac{1}{2\sqrt{7}} \ket{-1,1,1,1} + \frac{1}{\sqrt{7}} \ket{0,0,1,1} + \frac{1}{\sqrt{7}} \ket{0,1,0,1} + \frac{1}{\sqrt{7}} \ket{0,1,1,0} + \frac{1}{2\sqrt{7}} \ket{1,-1,1,1} + \frac{1}{\sqrt{7}} \ket{1,0,0,1} \\
+  & \; + \frac{1}{\sqrt{7}} \ket{1,0,1,0} + \frac{1}{2\sqrt{7}} \ket{1,1,-1,1} + \frac{1}{\sqrt{7}} \ket{1,1,0,0} + \frac{1}{2\sqrt{7}} \ket{1,1,1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=4,\,M=1,\,[4],\,a=1} = \; &\frac{1}{2\sqrt{7}} \ket{-1,0,1,1} + \frac{1}{2\sqrt{7}} \ket{-1,1,0,1} + \frac{1}{2\sqrt{7}} \ket{-1,1,1,0} + \frac{1}{2\sqrt{7}} \ket{0,-1,1,1} + \frac{1}{\sqrt{7}} \ket{0,0,0,1} + \frac{1}{\sqrt{7}} \ket{0,0,1,0} \\
+  & \; + \frac{1}{2\sqrt{7}} \ket{0,1,-1,1} + \frac{1}{\sqrt{7}} \ket{0,1,0,0} + \frac{1}{2\sqrt{7}} \ket{0,1,1,-1} + \frac{1}{2\sqrt{7}} \ket{1,-1,0,1} + \frac{1}{2\sqrt{7}} \ket{1,-1,1,0} + \frac{1}{2\sqrt{7}} \ket{1,0,-1,1} \\
+  & \; + \frac{1}{\sqrt{7}} \ket{1,0,0,0} + \frac{1}{2\sqrt{7}} \ket{1,0,1,-1} + \frac{1}{2\sqrt{7}} \ket{1,1,-1,0} + \frac{1}{2\sqrt{7}} \ket{1,1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=4,\,M=0,\,[4],\,a=1} = \; &\frac{1}{\sqrt{70}} \ket{-1,-1,1,1} + \sqrt{\frac{2}{35}} \ket{-1,0,0,1} + \sqrt{\frac{2}{35}} \ket{-1,0,1,0} + \frac{1}{\sqrt{70}} \ket{-1,1,-1,1} + \sqrt{\frac{2}{35}} \ket{-1,1,0,0} + \frac{1}{\sqrt{70}} \ket{-1,1,1,-1} \\
+  & \; + \sqrt{\frac{2}{35}} \ket{0,-1,0,1} + \sqrt{\frac{2}{35}} \ket{0,-1,1,0} + \sqrt{\frac{2}{35}} \ket{0,0,-1,1} + 2\sqrt{\frac{2}{35}} \ket{0,0,0,0} + \sqrt{\frac{2}{35}} \ket{0,0,1,-1} + \sqrt{\frac{2}{35}} \ket{0,1,-1,0} \\
+  & \; + \sqrt{\frac{2}{35}} \ket{0,1,0,-1} + \frac{1}{\sqrt{70}} \ket{1,-1,-1,1} + \sqrt{\frac{2}{35}} \ket{1,-1,0,0} + \frac{1}{\sqrt{70}} \ket{1,-1,1,-1} + \sqrt{\frac{2}{35}} \ket{1,0,-1,0} + \sqrt{\frac{2}{35}} \ket{1,0,0,-1} \\
+  & \; + \frac{1}{\sqrt{70}} \ket{1,1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=4,\,M=-1,\,[4],\,a=1} = \; &\frac{1}{2\sqrt{7}} \ket{-1,-1,0,1} + \frac{1}{2\sqrt{7}} \ket{-1,-1,1,0} + \frac{1}{2\sqrt{7}} \ket{-1,0,-1,1} + \frac{1}{\sqrt{7}} \ket{-1,0,0,0} + \frac{1}{2\sqrt{7}} \ket{-1,0,1,-1} + \frac{1}{2\sqrt{7}} \ket{-1,1,-1,0} \\
+  & \; + \frac{1}{2\sqrt{7}} \ket{-1,1,0,-1} + \frac{1}{2\sqrt{7}} \ket{0,-1,-1,1} + \frac{1}{\sqrt{7}} \ket{0,-1,0,0} + \frac{1}{2\sqrt{7}} \ket{0,-1,1,-1} + \frac{1}{\sqrt{7}} \ket{0,0,-1,0} + \frac{1}{\sqrt{7}} \ket{0,0,0,-1} \\
+  & \; + \frac{1}{2\sqrt{7}} \ket{0,1,-1,-1} + \frac{1}{2\sqrt{7}} \ket{1,-1,-1,0} + \frac{1}{2\sqrt{7}} \ket{1,-1,0,-1} + \frac{1}{2\sqrt{7}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=4,\,M=-2,\,[4],\,a=1} = \; &\frac{1}{2\sqrt{7}} \ket{-1,-1,-1,1} + \frac{1}{\sqrt{7}} \ket{-1,-1,0,0} + \frac{1}{2\sqrt{7}} \ket{-1,-1,1,-1} + \frac{1}{\sqrt{7}} \ket{-1,0,-1,0} + \frac{1}{\sqrt{7}} \ket{-1,0,0,-1} + \frac{1}{2\sqrt{7}} \ket{-1,1,-1,-1} \\
+  & \; + \frac{1}{\sqrt{7}} \ket{0,-1,-1,0} + \frac{1}{\sqrt{7}} \ket{0,-1,0,-1} + \frac{1}{\sqrt{7}} \ket{0,0,-1,-1} + \frac{1}{2\sqrt{7}} \ket{1,-1,-1,-1}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=4,\,M=-3,\,[4],\,a=1} = \; &\frac{1}{2} \ket{-1,-1,-1,0} + \frac{1}{2} \ket{-1,-1,0,-1} + \frac{1}{2} \ket{-1,0,-1,-1} + \frac{1}{2} \ket{0,-1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=4,\,M=-4,\,[4],\,a=1} = \; &\ket{-1,-1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=3,\,[3,1],\,a=1} = \; &\frac{1}{2\sqrt{3}} \ket{0,1,1,1} + \frac{1}{2\sqrt{3}} \ket{1,0,1,1} + \frac{1}{2\sqrt{3}} \ket{1,1,0,1} - \frac{\sqrt{3}}{2} \ket{1,1,1,0}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=3,\,[3,1],\,a=2} = \; &\frac{1}{\sqrt{6}} \ket{0,1,1,1} + \frac{1}{\sqrt{6}} \ket{1,0,1,1} - \sqrt{\frac{2}{3}} \ket{1,1,0,1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=3,\,[3,1],\,a=3} = \; &\frac{1}{\sqrt{2}} \ket{0,1,1,1} - \frac{1}{\sqrt{2}} \ket{1,0,1,1}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=2,\,[3,1],\,a=1} = \; &\frac{1}{6} \ket{-1,1,1,1} + \frac{1}{3} \ket{0,0,1,1} + \frac{1}{3} \ket{0,1,0,1} - \frac{1}{3} \ket{0,1,1,0} + \frac{1}{6} \ket{1,-1,1,1} + \frac{1}{3} \ket{1,0,0,1} \\
+  & \; - \frac{1}{3} \ket{1,0,1,0} + \frac{1}{6} \ket{1,1,-1,1} - \frac{1}{3} \ket{1,1,0,0} - \frac{1}{2} \ket{1,1,1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=2,\,[3,1],\,a=2} = \; &\frac{1}{3\sqrt{2}} \ket{-1,1,1,1} + \frac{\sqrt{2}}{3} \ket{0,0,1,1} - \frac{1}{3\sqrt{2}} \ket{0,1,0,1} + \frac{1}{3\sqrt{2}} \ket{0,1,1,0} + \frac{1}{3\sqrt{2}} \ket{1,-1,1,1} - \frac{1}{3\sqrt{2}} \ket{1,0,0,1} \\
+  & \; + \frac{1}{3\sqrt{2}} \ket{1,0,1,0} - \frac{\sqrt{2}}{3} \ket{1,1,-1,1} - \frac{\sqrt{2}}{3} \ket{1,1,0,0}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=2,\,[3,1],\,a=3} = \; &\frac{1}{\sqrt{6}} \ket{-1,1,1,1} + \frac{1}{\sqrt{6}} \ket{0,1,0,1} + \frac{1}{\sqrt{6}} \ket{0,1,1,0} - \frac{1}{\sqrt{6}} \ket{1,-1,1,1} - \frac{1}{\sqrt{6}} \ket{1,0,0,1} - \frac{1}{\sqrt{6}} \ket{1,0,1,0}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=1,\,[3,1],\,a=1} = \; &\frac{1}{2\sqrt{5}} \ket{-1,0,1,1} + \frac{1}{2\sqrt{5}} \ket{-1,1,0,1} - \frac{1}{6\sqrt{5}} \ket{-1,1,1,0} + \frac{1}{2\sqrt{5}} \ket{0,-1,1,1} + \frac{1}{\sqrt{5}} \ket{0,0,0,1} - \frac{1}{3\sqrt{5}} \ket{0,0,1,0} \\
+  & \; + \frac{1}{2\sqrt{5}} \ket{0,1,-1,1} - \frac{1}{3\sqrt{5}} \ket{0,1,0,0} - \frac{\sqrt{5}}{6} \ket{0,1,1,-1} + \frac{1}{2\sqrt{5}} \ket{1,-1,0,1} - \frac{1}{6\sqrt{5}} \ket{1,-1,1,0} + \frac{1}{2\sqrt{5}} \ket{1,0,-1,1} \\
+  & \; - \frac{1}{3\sqrt{5}} \ket{1,0,0,0} - \frac{\sqrt{5}}{6} \ket{1,0,1,-1} - \frac{1}{6\sqrt{5}} \ket{1,1,-1,0} - \frac{\sqrt{5}}{6} \ket{1,1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=1,\,[3,1],\,a=2} = \; &\frac{1}{\sqrt{10}} \ket{-1,0,1,1} + \frac{1}{3}\sqrt{\frac{2}{5}} \ket{-1,1,1,0} + \frac{1}{\sqrt{10}} \ket{0,-1,1,1} + \frac{2}{3}\sqrt{\frac{2}{5}} \ket{0,0,1,0} - \frac{1}{\sqrt{10}} \ket{0,1,-1,1} - \frac{1}{3}\sqrt{\frac{2}{5}} \ket{0,1,0,0} \\
+  & \; + \frac{1}{3\sqrt{10}} \ket{0,1,1,-1} + \frac{1}{3}\sqrt{\frac{2}{5}} \ket{1,-1,1,0} - \frac{1}{\sqrt{10}} \ket{1,0,-1,1} - \frac{1}{3}\sqrt{\frac{2}{5}} \ket{1,0,0,0} + \frac{1}{3\sqrt{10}} \ket{1,0,1,-1} - \frac{2}{3}\sqrt{\frac{2}{5}} \ket{1,1,-1,0} \\
+  & \; - \frac{1}{3}\sqrt{\frac{2}{5}} \ket{1,1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=1,\,[3,1],\,a=3} = \; &\frac{1}{\sqrt{30}} \ket{-1,0,1,1} + \sqrt{\frac{2}{15}} \ket{-1,1,0,1} + \sqrt{\frac{2}{15}} \ket{-1,1,1,0} - \frac{1}{\sqrt{30}} \ket{0,-1,1,1} + \frac{1}{\sqrt{30}} \ket{0,1,-1,1} + \sqrt{\frac{2}{15}} \ket{0,1,0,0} \\
+  & \; + \frac{1}{\sqrt{30}} \ket{0,1,1,-1} - \sqrt{\frac{2}{15}} \ket{1,-1,0,1} - \sqrt{\frac{2}{15}} \ket{1,-1,1,0} - \frac{1}{\sqrt{30}} \ket{1,0,-1,1} - \sqrt{\frac{2}{15}} \ket{1,0,0,0} - \frac{1}{\sqrt{30}} \ket{1,0,1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=0,\,[3,1],\,a=1} = \; &\frac{1}{\sqrt{30}} \ket{-1,-1,1,1} + \sqrt{\frac{2}{15}} \ket{-1,0,0,1} + \frac{1}{\sqrt{30}} \ket{-1,1,-1,1} - \frac{1}{\sqrt{30}} \ket{-1,1,1,-1} + \sqrt{\frac{2}{15}} \ket{0,-1,0,1} + \sqrt{\frac{2}{15}} \ket{0,0,-1,1} \\
+  & \; - \sqrt{\frac{2}{15}} \ket{0,0,1,-1} - \sqrt{\frac{2}{15}} \ket{0,1,0,-1} + \frac{1}{\sqrt{30}} \ket{1,-1,-1,1} - \frac{1}{\sqrt{30}} \ket{1,-1,1,-1} - \sqrt{\frac{2}{15}} \ket{1,0,0,-1} - \frac{1}{\sqrt{30}} \ket{1,1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=0,\,[3,1],\,a=2} = \; &\frac{1}{\sqrt{15}} \ket{-1,-1,1,1} + \frac{1}{2\sqrt{15}} \ket{-1,0,0,1} + \frac{1}{2}\sqrt{\frac{3}{5}} \ket{-1,0,1,0} - \frac{1}{2\sqrt{15}} \ket{-1,1,-1,1} + \frac{1}{2\sqrt{15}} \ket{-1,1,1,-1} + \frac{1}{2\sqrt{15}} \ket{0,-1,0,1} \\
+  & \; + \frac{1}{2}\sqrt{\frac{3}{5}} \ket{0,-1,1,0} - \frac{1}{\sqrt{15}} \ket{0,0,-1,1} + \frac{1}{\sqrt{15}} \ket{0,0,1,-1} - \frac{1}{2}\sqrt{\frac{3}{5}} \ket{0,1,-1,0} - \frac{1}{2\sqrt{15}} \ket{0,1,0,-1} - \frac{1}{2\sqrt{15}} \ket{1,-1,-1,1} \\
+  & \; + \frac{1}{2\sqrt{15}} \ket{1,-1,1,-1} - \frac{1}{2}\sqrt{\frac{3}{5}} \ket{1,0,-1,0} - \frac{1}{2\sqrt{15}} \ket{1,0,0,-1} - \frac{1}{\sqrt{15}} \ket{1,1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=0,\,[3,1],\,a=3} = \; &\frac{1}{2\sqrt{5}} \ket{-1,0,0,1} + \frac{1}{2\sqrt{5}} \ket{-1,0,1,0} + \frac{1}{2\sqrt{5}} \ket{-1,1,-1,1} + \frac{1}{\sqrt{5}} \ket{-1,1,0,0} + \frac{1}{2\sqrt{5}} \ket{-1,1,1,-1} - \frac{1}{2\sqrt{5}} \ket{0,-1,0,1} \\
+  & \; - \frac{1}{2\sqrt{5}} \ket{0,-1,1,0} + \frac{1}{2\sqrt{5}} \ket{0,1,-1,0} + \frac{1}{2\sqrt{5}} \ket{0,1,0,-1} - \frac{1}{2\sqrt{5}} \ket{1,-1,-1,1} - \frac{1}{\sqrt{5}} \ket{1,-1,0,0} - \frac{1}{2\sqrt{5}} \ket{1,-1,1,-1} \\
+  & \; - \frac{1}{2\sqrt{5}} \ket{1,0,-1,0} - \frac{1}{2\sqrt{5}} \ket{1,0,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-1,\,[3,1],\,a=1} = \; &\frac{\sqrt{5}}{6} \ket{-1,-1,0,1} + \frac{1}{6\sqrt{5}} \ket{-1,-1,1,0} + \frac{\sqrt{5}}{6} \ket{-1,0,-1,1} + \frac{1}{3\sqrt{5}} \ket{-1,0,0,0} - \frac{1}{2\sqrt{5}} \ket{-1,0,1,-1} + \frac{1}{6\sqrt{5}} \ket{-1,1,-1,0} \\
+  & \; - \frac{1}{2\sqrt{5}} \ket{-1,1,0,-1} + \frac{\sqrt{5}}{6} \ket{0,-1,-1,1} + \frac{1}{3\sqrt{5}} \ket{0,-1,0,0} - \frac{1}{2\sqrt{5}} \ket{0,-1,1,-1} + \frac{1}{3\sqrt{5}} \ket{0,0,-1,0} - \frac{1}{\sqrt{5}} \ket{0,0,0,-1} \\
+  & \; - \frac{1}{2\sqrt{5}} \ket{0,1,-1,-1} + \frac{1}{6\sqrt{5}} \ket{1,-1,-1,0} - \frac{1}{2\sqrt{5}} \ket{1,-1,0,-1} - \frac{1}{2\sqrt{5}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-1,\,[3,1],\,a=2} = \; &\frac{1}{3}\sqrt{\frac{2}{5}} \ket{-1,-1,0,1} + \frac{2}{3}\sqrt{\frac{2}{5}} \ket{-1,-1,1,0} - \frac{1}{3\sqrt{10}} \ket{-1,0,-1,1} + \frac{1}{3}\sqrt{\frac{2}{5}} \ket{-1,0,0,0} + \frac{1}{\sqrt{10}} \ket{-1,0,1,-1} - \frac{1}{3}\sqrt{\frac{2}{5}} \ket{-1,1,-1,0} \\
+  & \; - \frac{1}{3\sqrt{10}} \ket{0,-1,-1,1} + \frac{1}{3}\sqrt{\frac{2}{5}} \ket{0,-1,0,0} + \frac{1}{\sqrt{10}} \ket{0,-1,1,-1} - \frac{2}{3}\sqrt{\frac{2}{5}} \ket{0,0,-1,0} - \frac{1}{\sqrt{10}} \ket{0,1,-1,-1} - \frac{1}{3}\sqrt{\frac{2}{5}} \ket{1,-1,-1,0} \\
+  & \; - \frac{1}{\sqrt{10}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-1,\,[3,1],\,a=3} = \; &\frac{1}{\sqrt{30}} \ket{-1,0,-1,1} + \sqrt{\frac{2}{15}} \ket{-1,0,0,0} + \frac{1}{\sqrt{30}} \ket{-1,0,1,-1} + \sqrt{\frac{2}{15}} \ket{-1,1,-1,0} + \sqrt{\frac{2}{15}} \ket{-1,1,0,-1} - \frac{1}{\sqrt{30}} \ket{0,-1,-1,1} \\
+  & \; - \sqrt{\frac{2}{15}} \ket{0,-1,0,0} - \frac{1}{\sqrt{30}} \ket{0,-1,1,-1} + \frac{1}{\sqrt{30}} \ket{0,1,-1,-1} - \sqrt{\frac{2}{15}} \ket{1,-1,-1,0} - \sqrt{\frac{2}{15}} \ket{1,-1,0,-1} - \frac{1}{\sqrt{30}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-2,\,[3,1],\,a=1} = \; &\frac{1}{2} \ket{-1,-1,-1,1} + \frac{1}{3} \ket{-1,-1,0,0} - \frac{1}{6} \ket{-1,-1,1,-1} + \frac{1}{3} \ket{-1,0,-1,0} - \frac{1}{3} \ket{-1,0,0,-1} - \frac{1}{6} \ket{-1,1,-1,-1} \\
+  & \; + \frac{1}{3} \ket{0,-1,-1,0} - \frac{1}{3} \ket{0,-1,0,-1} - \frac{1}{3} \ket{0,0,-1,-1} - \frac{1}{6} \ket{1,-1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-2,\,[3,1],\,a=2} = \; &\frac{\sqrt{2}}{3} \ket{-1,-1,0,0} + \frac{\sqrt{2}}{3} \ket{-1,-1,1,-1} - \frac{1}{3\sqrt{2}} \ket{-1,0,-1,0} + \frac{1}{3\sqrt{2}} \ket{-1,0,0,-1} - \frac{1}{3\sqrt{2}} \ket{-1,1,-1,-1} - \frac{1}{3\sqrt{2}} \ket{0,-1,-1,0} \\
+  & \; + \frac{1}{3\sqrt{2}} \ket{0,-1,0,-1} - \frac{\sqrt{2}}{3} \ket{0,0,-1,-1} - \frac{1}{3\sqrt{2}} \ket{1,-1,-1,-1}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-2,\,[3,1],\,a=3} = \; &\frac{1}{\sqrt{6}} \ket{-1,0,-1,0} + \frac{1}{\sqrt{6}} \ket{-1,0,0,-1} + \frac{1}{\sqrt{6}} \ket{-1,1,-1,-1} - \frac{1}{\sqrt{6}} \ket{0,-1,-1,0} - \frac{1}{\sqrt{6}} \ket{0,-1,0,-1} - \frac{1}{\sqrt{6}} \ket{1,-1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-3,\,[3,1],\,a=1} = \; &\frac{\sqrt{3}}{2} \ket{-1,-1,-1,0} - \frac{1}{2\sqrt{3}} \ket{-1,-1,0,-1} - \frac{1}{2\sqrt{3}} \ket{-1,0,-1,-1} - \frac{1}{2\sqrt{3}} \ket{0,-1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-3,\,[3,1],\,a=2} = \; &\sqrt{\frac{2}{3}} \ket{-1,-1,0,-1} - \frac{1}{\sqrt{6}} \ket{-1,0,-1,-1} - \frac{1}{\sqrt{6}} \ket{0,-1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=3,\,M=-3,\,[3,1],\,a=3} = \; &\frac{1}{\sqrt{2}} \ket{-1,0,-1,-1} - \frac{1}{\sqrt{2}} \ket{0,-1,-1,-1}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[4],\,a=1} = \; &\sqrt{\frac{3}{14}} \ket{-1,1,1,1} - \frac{1}{\sqrt{42}} \ket{0,0,1,1} - \frac{1}{\sqrt{42}} \ket{0,1,0,1} - \frac{1}{\sqrt{42}} \ket{0,1,1,0} + \sqrt{\frac{3}{14}} \ket{1,-1,1,1} - \frac{1}{\sqrt{42}} \ket{1,0,0,1} \\
+  & \; - \frac{1}{\sqrt{42}} \ket{1,0,1,0} + \sqrt{\frac{3}{14}} \ket{1,1,-1,1} - \frac{1}{\sqrt{42}} \ket{1,1,0,0} + \sqrt{\frac{3}{14}} \ket{1,1,1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[4],\,a=1} = \; &\frac{1}{\sqrt{21}} \ket{-1,0,1,1} + \frac{1}{\sqrt{21}} \ket{-1,1,0,1} + \frac{1}{\sqrt{21}} \ket{-1,1,1,0} + \frac{1}{\sqrt{21}} \ket{0,-1,1,1} - \frac{1}{2}\sqrt{\frac{3}{7}} \ket{0,0,0,1} - \frac{1}{2}\sqrt{\frac{3}{7}} \ket{0,0,1,0} \\
+  & \; + \frac{1}{\sqrt{21}} \ket{0,1,-1,1} - \frac{1}{2}\sqrt{\frac{3}{7}} \ket{0,1,0,0} + \frac{1}{\sqrt{21}} \ket{0,1,1,-1} + \frac{1}{\sqrt{21}} \ket{1,-1,0,1} + \frac{1}{\sqrt{21}} \ket{1,-1,1,0} + \frac{1}{\sqrt{21}} \ket{1,0,-1,1} \\
+  & \; - \frac{1}{2}\sqrt{\frac{3}{7}} \ket{1,0,0,0} + \frac{1}{\sqrt{21}} \ket{1,0,1,-1} + \frac{1}{\sqrt{21}} \ket{1,1,-1,0} + \frac{1}{\sqrt{21}} \ket{1,1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[4],\,a=1} = \; &\frac{2}{3\sqrt{7}} \ket{-1,-1,1,1} + \frac{1}{6\sqrt{7}} \ket{-1,0,0,1} + \frac{1}{6\sqrt{7}} \ket{-1,0,1,0} + \frac{2}{3\sqrt{7}} \ket{-1,1,-1,1} + \frac{1}{6\sqrt{7}} \ket{-1,1,0,0} + \frac{2}{3\sqrt{7}} \ket{-1,1,1,-1} \\
+  & \; + \frac{1}{6\sqrt{7}} \ket{0,-1,0,1} + \frac{1}{6\sqrt{7}} \ket{0,-1,1,0} + \frac{1}{6\sqrt{7}} \ket{0,0,-1,1} - \frac{2}{\sqrt{7}} \ket{0,0,0,0} + \frac{1}{6\sqrt{7}} \ket{0,0,1,-1} + \frac{1}{6\sqrt{7}} \ket{0,1,-1,0} \\
+  & \; + \frac{1}{6\sqrt{7}} \ket{0,1,0,-1} + \frac{2}{3\sqrt{7}} \ket{1,-1,-1,1} + \frac{1}{6\sqrt{7}} \ket{1,-1,0,0} + \frac{2}{3\sqrt{7}} \ket{1,-1,1,-1} + \frac{1}{6\sqrt{7}} \ket{1,0,-1,0} + \frac{1}{6\sqrt{7}} \ket{1,0,0,-1} \\
+  & \; + \frac{2}{3\sqrt{7}} \ket{1,1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[4],\,a=1} = \; &\frac{1}{\sqrt{21}} \ket{-1,-1,0,1} + \frac{1}{\sqrt{21}} \ket{-1,-1,1,0} + \frac{1}{\sqrt{21}} \ket{-1,0,-1,1} - \frac{1}{2}\sqrt{\frac{3}{7}} \ket{-1,0,0,0} + \frac{1}{\sqrt{21}} \ket{-1,0,1,-1} + \frac{1}{\sqrt{21}} \ket{-1,1,-1,0} \\
+  & \; + \frac{1}{\sqrt{21}} \ket{-1,1,0,-1} + \frac{1}{\sqrt{21}} \ket{0,-1,-1,1} - \frac{1}{2}\sqrt{\frac{3}{7}} \ket{0,-1,0,0} + \frac{1}{\sqrt{21}} \ket{0,-1,1,-1} - \frac{1}{2}\sqrt{\frac{3}{7}} \ket{0,0,-1,0} - \frac{1}{2}\sqrt{\frac{3}{7}} \ket{0,0,0,-1} \\
+  & \; + \frac{1}{\sqrt{21}} \ket{0,1,-1,-1} + \frac{1}{\sqrt{21}} \ket{1,-1,-1,0} + \frac{1}{\sqrt{21}} \ket{1,-1,0,-1} + \frac{1}{\sqrt{21}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[4],\,a=1} = \; &\sqrt{\frac{3}{14}} \ket{-1,-1,-1,1} - \frac{1}{\sqrt{42}} \ket{-1,-1,0,0} + \sqrt{\frac{3}{14}} \ket{-1,-1,1,-1} - \frac{1}{\sqrt{42}} \ket{-1,0,-1,0} - \frac{1}{\sqrt{42}} \ket{-1,0,0,-1} + \sqrt{\frac{3}{14}} \ket{-1,1,-1,-1} \\
+  & \; - \frac{1}{\sqrt{42}} \ket{0,-1,-1,0} - \frac{1}{\sqrt{42}} \ket{0,-1,0,-1} - \frac{1}{\sqrt{42}} \ket{0,0,-1,-1} + \sqrt{\frac{3}{14}} \ket{1,-1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[3,1],\,a=1} = \; &- \frac{1}{3\sqrt{2}} \ket{-1,1,1,1} + \frac{1}{3\sqrt{2}} \ket{0,0,1,1} + \frac{1}{3\sqrt{2}} \ket{0,1,0,1} - \frac{1}{3\sqrt{2}} \ket{0,1,1,0} - \frac{1}{3\sqrt{2}} \ket{1,-1,1,1} + \frac{1}{3\sqrt{2}} \ket{1,0,0,1} \\
+  & \; - \frac{1}{3\sqrt{2}} \ket{1,0,1,0} - \frac{1}{3\sqrt{2}} \ket{1,1,-1,1} - \frac{1}{3\sqrt{2}} \ket{1,1,0,0} + \frac{1}{\sqrt{2}} \ket{1,1,1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[3,1],\,a=2} = \; &- \frac{1}{3} \ket{-1,1,1,1} + \frac{1}{3} \ket{0,0,1,1} - \frac{1}{6} \ket{0,1,0,1} + \frac{1}{6} \ket{0,1,1,0} - \frac{1}{3} \ket{1,-1,1,1} - \frac{1}{6} \ket{1,0,0,1} \\
+  & \; + \frac{1}{6} \ket{1,0,1,0} + \frac{2}{3} \ket{1,1,-1,1} - \frac{1}{3} \ket{1,1,0,0}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[3,1],\,a=3} = \; &- \frac{1}{\sqrt{3}} \ket{-1,1,1,1} + \frac{1}{2\sqrt{3}} \ket{0,1,0,1} + \frac{1}{2\sqrt{3}} \ket{0,1,1,0} + \frac{1}{\sqrt{3}} \ket{1,-1,1,1} - \frac{1}{2\sqrt{3}} \ket{1,0,0,1} - \frac{1}{2\sqrt{3}} \ket{1,0,1,0}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[3,1],\,a=1} = \; &- \frac{1}{3} \ket{-1,1,1,0} + \frac{1}{2} \ket{0,0,0,1} - \frac{1}{6} \ket{0,0,1,0} - \frac{1}{6} \ket{0,1,0,0} + \frac{1}{3} \ket{0,1,1,-1} - \frac{1}{3} \ket{1,-1,1,0} \\
+  & \; - \frac{1}{6} \ket{1,0,0,0} + \frac{1}{3} \ket{1,0,1,-1} - \frac{1}{3} \ket{1,1,-1,0} + \frac{1}{3} \ket{1,1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[3,1],\,a=2} = \; &- \frac{1}{2\sqrt{2}} \ket{-1,1,0,1} - \frac{1}{6\sqrt{2}} \ket{-1,1,1,0} + \frac{\sqrt{2}}{3} \ket{0,0,1,0} + \frac{1}{2\sqrt{2}} \ket{0,1,-1,1} - \frac{1}{3\sqrt{2}} \ket{0,1,0,0} + \frac{1}{6\sqrt{2}} \ket{0,1,1,-1} \\
+  & \; - \frac{1}{2\sqrt{2}} \ket{1,-1,0,1} - \frac{1}{6\sqrt{2}} \ket{1,-1,1,0} + \frac{1}{2\sqrt{2}} \ket{1,0,-1,1} - \frac{1}{3\sqrt{2}} \ket{1,0,0,0} + \frac{1}{6\sqrt{2}} \ket{1,0,1,-1} + \frac{1}{3\sqrt{2}} \ket{1,1,-1,0} \\
+  & \; - \frac{1}{3\sqrt{2}} \ket{1,1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[3,1],\,a=3} = \; &- \frac{1}{\sqrt{6}} \ket{-1,0,1,1} - \frac{1}{2\sqrt{6}} \ket{-1,1,0,1} - \frac{1}{2\sqrt{6}} \ket{-1,1,1,0} + \frac{1}{\sqrt{6}} \ket{0,-1,1,1} + \frac{1}{2\sqrt{6}} \ket{0,1,-1,1} + \frac{1}{\sqrt{6}} \ket{0,1,0,0} \\
+  & \; + \frac{1}{2\sqrt{6}} \ket{0,1,1,-1} + \frac{1}{2\sqrt{6}} \ket{1,-1,0,1} + \frac{1}{2\sqrt{6}} \ket{1,-1,1,0} - \frac{1}{2\sqrt{6}} \ket{1,0,-1,1} - \frac{1}{\sqrt{6}} \ket{1,0,0,0} - \frac{1}{2\sqrt{6}} \ket{1,0,1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[3,1],\,a=1} = \; &\frac{1}{2\sqrt{3}} \ket{-1,0,0,1} - \frac{1}{2\sqrt{3}} \ket{-1,0,1,0} - \frac{1}{2\sqrt{3}} \ket{-1,1,0,0} + \frac{1}{2\sqrt{3}} \ket{0,-1,0,1} - \frac{1}{2\sqrt{3}} \ket{0,-1,1,0} + \frac{1}{2\sqrt{3}} \ket{0,0,-1,1} \\
+  & \; + \frac{1}{2\sqrt{3}} \ket{0,0,1,-1} - \frac{1}{2\sqrt{3}} \ket{0,1,-1,0} + \frac{1}{2\sqrt{3}} \ket{0,1,0,-1} - \frac{1}{2\sqrt{3}} \ket{1,-1,0,0} - \frac{1}{2\sqrt{3}} \ket{1,0,-1,0} + \frac{1}{2\sqrt{3}} \ket{1,0,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[3,1],\,a=2} = \; &- \frac{1}{2\sqrt{6}} \ket{-1,0,0,1} + \frac{1}{2\sqrt{6}} \ket{-1,0,1,0} - \frac{1}{\sqrt{6}} \ket{-1,1,0,0} - \frac{1}{2\sqrt{6}} \ket{0,-1,0,1} + \frac{1}{2\sqrt{6}} \ket{0,-1,1,0} + \frac{1}{\sqrt{6}} \ket{0,0,-1,1} \\
+  & \; + \frac{1}{\sqrt{6}} \ket{0,0,1,-1} + \frac{1}{2\sqrt{6}} \ket{0,1,-1,0} - \frac{1}{2\sqrt{6}} \ket{0,1,0,-1} - \frac{1}{\sqrt{6}} \ket{1,-1,0,0} + \frac{1}{2\sqrt{6}} \ket{1,0,-1,0} - \frac{1}{2\sqrt{6}} \ket{1,0,0,-1}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[3,1],\,a=3} = \; &- \frac{1}{2\sqrt{2}} \ket{-1,0,0,1} - \frac{1}{2\sqrt{2}} \ket{-1,0,1,0} + \frac{1}{2\sqrt{2}} \ket{0,-1,0,1} + \frac{1}{2\sqrt{2}} \ket{0,-1,1,0} + \frac{1}{2\sqrt{2}} \ket{0,1,-1,0} + \frac{1}{2\sqrt{2}} \ket{0,1,0,-1} - \frac{1}{2\sqrt{2}} \ket{1,0,-1,0} - \frac{1}{2\sqrt{2}} \ket{1,0,0,-1}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[3,1],\,a=1} = \; &\frac{1}{3} \ket{-1,-1,0,1} - \frac{1}{3} \ket{-1,-1,1,0} + \frac{1}{3} \ket{-1,0,-1,1} - \frac{1}{6} \ket{-1,0,0,0} - \frac{1}{3} \ket{-1,1,-1,0} + \frac{1}{3} \ket{0,-1,-1,1} \\
+  & \; - \frac{1}{6} \ket{0,-1,0,0} - \frac{1}{6} \ket{0,0,-1,0} + \frac{1}{2} \ket{0,0,0,-1} - \frac{1}{3} \ket{1,-1,-1,0}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[3,1],\,a=2} = \; &- \frac{1}{3\sqrt{2}} \ket{-1,-1,0,1} + \frac{1}{3\sqrt{2}} \ket{-1,-1,1,0} + \frac{1}{6\sqrt{2}} \ket{-1,0,-1,1} - \frac{1}{3\sqrt{2}} \ket{-1,0,0,0} + \frac{1}{2\sqrt{2}} \ket{-1,0,1,-1} - \frac{1}{6\sqrt{2}} \ket{-1,1,-1,0} \\
+  & \; - \frac{1}{2\sqrt{2}} \ket{-1,1,0,-1} + \frac{1}{6\sqrt{2}} \ket{0,-1,-1,1} - \frac{1}{3\sqrt{2}} \ket{0,-1,0,0} + \frac{1}{2\sqrt{2}} \ket{0,-1,1,-1} + \frac{\sqrt{2}}{3} \ket{0,0,-1,0} - \frac{1}{6\sqrt{2}} \ket{1,-1,-1,0} \\
+  & \; - \frac{1}{2\sqrt{2}} \ket{1,-1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[3,1],\,a=3} = \; &- \frac{1}{2\sqrt{6}} \ket{-1,0,-1,1} - \frac{1}{\sqrt{6}} \ket{-1,0,0,0} - \frac{1}{2\sqrt{6}} \ket{-1,0,1,-1} + \frac{1}{2\sqrt{6}} \ket{-1,1,-1,0} + \frac{1}{2\sqrt{6}} \ket{-1,1,0,-1} + \frac{1}{2\sqrt{6}} \ket{0,-1,-1,1} \\
+  & \; + \frac{1}{\sqrt{6}} \ket{0,-1,0,0} + \frac{1}{2\sqrt{6}} \ket{0,-1,1,-1} + \frac{1}{\sqrt{6}} \ket{0,1,-1,-1} - \frac{1}{2\sqrt{6}} \ket{1,-1,-1,0} - \frac{1}{2\sqrt{6}} \ket{1,-1,0,-1} - \frac{1}{\sqrt{6}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[3,1],\,a=1} = \; &\frac{1}{\sqrt{2}} \ket{-1,-1,-1,1} - \frac{1}{3\sqrt{2}} \ket{-1,-1,0,0} - \frac{1}{3\sqrt{2}} \ket{-1,-1,1,-1} - \frac{1}{3\sqrt{2}} \ket{-1,0,-1,0} + \frac{1}{3\sqrt{2}} \ket{-1,0,0,-1} - \frac{1}{3\sqrt{2}} \ket{-1,1,-1,-1} \\
+  & \; - \frac{1}{3\sqrt{2}} \ket{0,-1,-1,0} + \frac{1}{3\sqrt{2}} \ket{0,-1,0,-1} + \frac{1}{3\sqrt{2}} \ket{0,0,-1,-1} - \frac{1}{3\sqrt{2}} \ket{1,-1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[3,1],\,a=2} = \; &- \frac{1}{3} \ket{-1,-1,0,0} + \frac{2}{3} \ket{-1,-1,1,-1} + \frac{1}{6} \ket{-1,0,-1,0} - \frac{1}{6} \ket{-1,0,0,-1} - \frac{1}{3} \ket{-1,1,-1,-1} + \frac{1}{6} \ket{0,-1,-1,0} \\
+  & \; - \frac{1}{6} \ket{0,-1,0,-1} + \frac{1}{3} \ket{0,0,-1,-1} - \frac{1}{3} \ket{1,-1,-1,-1}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[3,1],\,a=3} = \; &- \frac{1}{2\sqrt{3}} \ket{-1,0,-1,0} - \frac{1}{2\sqrt{3}} \ket{-1,0,0,-1} + \frac{1}{\sqrt{3}} \ket{-1,1,-1,-1} + \frac{1}{2\sqrt{3}} \ket{0,-1,-1,0} + \frac{1}{2\sqrt{3}} \ket{0,-1,0,-1} - \frac{1}{\sqrt{3}} \ket{1,-1,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[2,2],\,a=1} = \; &- \frac{1}{\sqrt{3}} \ket{0,0,1,1} + \frac{1}{2\sqrt{3}} \ket{0,1,0,1} + \frac{1}{2\sqrt{3}} \ket{0,1,1,0} + \frac{1}{2\sqrt{3}} \ket{1,0,0,1} + \frac{1}{2\sqrt{3}} \ket{1,0,1,0} - \frac{1}{\sqrt{3}} \ket{1,1,0,0}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=2,\,[2,2],\,a=2} = \; &- \frac{1}{2} \ket{0,1,0,1} + \frac{1}{2} \ket{0,1,1,0} + \frac{1}{2} \ket{1,0,0,1} - \frac{1}{2} \ket{1,0,1,0}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[2,2],\,a=1} = \; &- \frac{1}{\sqrt{6}} \ket{-1,0,1,1} + \frac{1}{2\sqrt{6}} \ket{-1,1,0,1} + \frac{1}{2\sqrt{6}} \ket{-1,1,1,0} - \frac{1}{\sqrt{6}} \ket{0,-1,1,1} + \frac{1}{2\sqrt{6}} \ket{0,1,-1,1} + \frac{1}{2\sqrt{6}} \ket{0,1,1,-1} \\
+  & \; + \frac{1}{2\sqrt{6}} \ket{1,-1,0,1} + \frac{1}{2\sqrt{6}} \ket{1,-1,1,0} + \frac{1}{2\sqrt{6}} \ket{1,0,-1,1} + \frac{1}{2\sqrt{6}} \ket{1,0,1,-1} - \frac{1}{\sqrt{6}} \ket{1,1,-1,0} - \frac{1}{\sqrt{6}} \ket{1,1,0,-1}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=1,\,[2,2],\,a=2} = \; &- \frac{1}{2\sqrt{2}} \ket{-1,1,0,1} + \frac{1}{2\sqrt{2}} \ket{-1,1,1,0} - \frac{1}{2\sqrt{2}} \ket{0,1,-1,1} + \frac{1}{2\sqrt{2}} \ket{0,1,1,-1} + \frac{1}{2\sqrt{2}} \ket{1,-1,0,1} - \frac{1}{2\sqrt{2}} \ket{1,-1,1,0} + \frac{1}{2\sqrt{2}} \ket{1,0,-1,1} - \frac{1}{2\sqrt{2}} \ket{1,0,1,-1}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[2,2],\,a=1} = \; &- \frac{\sqrt{2}}{3} \ket{-1,-1,1,1} - \frac{1}{6\sqrt{2}} \ket{-1,0,0,1} - \frac{1}{6\sqrt{2}} \ket{-1,0,1,0} + \frac{1}{3\sqrt{2}} \ket{-1,1,-1,1} + \frac{1}{3\sqrt{2}} \ket{-1,1,0,0} + \frac{1}{3\sqrt{2}} \ket{-1,1,1,-1} \\
+  & \; - \frac{1}{6\sqrt{2}} \ket{0,-1,0,1} - \frac{1}{6\sqrt{2}} \ket{0,-1,1,0} + \frac{1}{3\sqrt{2}} \ket{0,0,-1,1} + \frac{1}{3\sqrt{2}} \ket{0,0,1,-1} - \frac{1}{6\sqrt{2}} \ket{0,1,-1,0} - \frac{1}{6\sqrt{2}} \ket{0,1,0,-1} \\
+  & \; + \frac{1}{3\sqrt{2}} \ket{1,-1,-1,1} + \frac{1}{3\sqrt{2}} \ket{1,-1,0,0} + \frac{1}{3\sqrt{2}} \ket{1,-1,1,-1} - \frac{1}{6\sqrt{2}} \ket{1,0,-1,0} - \frac{1}{6\sqrt{2}} \ket{1,0,0,-1} - \frac{\sqrt{2}}{3} \ket{1,1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=0,\,[2,2],\,a=2} = \; &- \frac{1}{2\sqrt{6}} \ket{-1,0,0,1} + \frac{1}{2\sqrt{6}} \ket{-1,0,1,0} - \frac{1}{\sqrt{6}} \ket{-1,1,-1,1} + \frac{1}{\sqrt{6}} \ket{-1,1,1,-1} + \frac{1}{2\sqrt{6}} \ket{0,-1,0,1} - \frac{1}{2\sqrt{6}} \ket{0,-1,1,0} \\
+  & \; - \frac{1}{2\sqrt{6}} \ket{0,1,-1,0} + \frac{1}{2\sqrt{6}} \ket{0,1,0,-1} + \frac{1}{\sqrt{6}} \ket{1,-1,-1,1} - \frac{1}{\sqrt{6}} \ket{1,-1,1,-1} + \frac{1}{2\sqrt{6}} \ket{1,0,-1,0} - \frac{1}{2\sqrt{6}} \ket{1,0,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[2,2],\,a=1} = \; &- \frac{1}{\sqrt{6}} \ket{-1,-1,0,1} - \frac{1}{\sqrt{6}} \ket{-1,-1,1,0} + \frac{1}{2\sqrt{6}} \ket{-1,0,-1,1} + \frac{1}{2\sqrt{6}} \ket{-1,0,1,-1} + \frac{1}{2\sqrt{6}} \ket{-1,1,-1,0} + \frac{1}{2\sqrt{6}} \ket{-1,1,0,-1} \\
+  & \; + \frac{1}{2\sqrt{6}} \ket{0,-1,-1,1} + \frac{1}{2\sqrt{6}} \ket{0,-1,1,-1} - \frac{1}{\sqrt{6}} \ket{0,1,-1,-1} + \frac{1}{2\sqrt{6}} \ket{1,-1,-1,0} + \frac{1}{2\sqrt{6}} \ket{1,-1,0,-1} - \frac{1}{\sqrt{6}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-1,\,[2,2],\,a=2} = \; &- \frac{1}{2\sqrt{2}} \ket{-1,0,-1,1} + \frac{1}{2\sqrt{2}} \ket{-1,0,1,-1} - \frac{1}{2\sqrt{2}} \ket{-1,1,-1,0} + \frac{1}{2\sqrt{2}} \ket{-1,1,0,-1} + \frac{1}{2\sqrt{2}} \ket{0,-1,-1,1} - \frac{1}{2\sqrt{2}} \ket{0,-1,1,-1} + \frac{1}{2\sqrt{2}} \ket{1,-1,-1,0} - \frac{1}{2\sqrt{2}} \ket{1,-1,0,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[2,2],\,a=1} = \; &- \frac{1}{\sqrt{3}} \ket{-1,-1,0,0} + \frac{1}{2\sqrt{3}} \ket{-1,0,-1,0} + \frac{1}{2\sqrt{3}} \ket{-1,0,0,-1} + \frac{1}{2\sqrt{3}} \ket{0,-1,-1,0} + \frac{1}{2\sqrt{3}} \ket{0,-1,0,-1} - \frac{1}{\sqrt{3}} \ket{0,0,-1,-1}
+\end{aligned}
+\end{equation*}
+\begin{equation*}
+\begin{aligned}
+\ket{J=2,\,M=-2,\,[2,2],\,a=2} = \; &- \frac{1}{2} \ket{-1,0,-1,0} + \frac{1}{2} \ket{-1,0,0,-1} + \frac{1}{2} \ket{0,-1,-1,0} - \frac{1}{2} \ket{0,-1,0,-1}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[3,1],\,a=1} = \; &\frac{1}{\sqrt{30}} \ket{-1,0,1,1} + \frac{1}{\sqrt{30}} \ket{-1,1,0,1} - \sqrt{\frac{2}{15}} \ket{-1,1,1,0} + \frac{1}{\sqrt{30}} \ket{0,-1,1,1} - \sqrt{\frac{3}{10}} \ket{0,0,0,1} + \frac{1}{\sqrt{30}} \ket{0,0,1,0} \\
+  & \; + \frac{1}{\sqrt{30}} \ket{0,1,-1,1} + \frac{1}{\sqrt{30}} \ket{0,1,0,0} + \frac{1}{\sqrt{30}} \ket{1,-1,0,1} - \sqrt{\frac{2}{15}} \ket{1,-1,1,0} + \frac{1}{\sqrt{30}} \ket{1,0,-1,1} + \frac{1}{\sqrt{30}} \ket{1,0,0,0} \\
+  & \; - \sqrt{\frac{2}{15}} \ket{1,1,-1,0}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[3,1],\,a=2} = \; &\frac{1}{\sqrt{15}} \ket{-1,0,1,1} - \frac{1}{4}\sqrt{\frac{5}{3}} \ket{-1,1,0,1} + \frac{1}{4\sqrt{15}} \ket{-1,1,1,0} + \frac{1}{\sqrt{15}} \ket{0,-1,1,1} - \frac{2}{\sqrt{15}} \ket{0,0,1,0} + \frac{1}{4\sqrt{15}} \ket{0,1,-1,1} \\
+  & \; + \frac{1}{\sqrt{15}} \ket{0,1,0,0} + \frac{1}{4}\sqrt{\frac{3}{5}} \ket{0,1,1,-1} - \frac{1}{4}\sqrt{\frac{5}{3}} \ket{1,-1,0,1} + \frac{1}{4\sqrt{15}} \ket{1,-1,1,0} + \frac{1}{4\sqrt{15}} \ket{1,0,-1,1} + \frac{1}{\sqrt{15}} \ket{1,0,0,0} \\
+  & \; + \frac{1}{4}\sqrt{\frac{3}{5}} \ket{1,0,1,-1} - \frac{1}{2\sqrt{15}} \ket{1,1,-1,0} - \frac{1}{2}\sqrt{\frac{3}{5}} \ket{1,1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[3,1],\,a=3} = \; &- \frac{1}{2\sqrt{5}} \ket{-1,0,1,1} + \frac{1}{4\sqrt{5}} \ket{-1,1,0,1} + \frac{1}{4\sqrt{5}} \ket{-1,1,1,0} + \frac{1}{2\sqrt{5}} \ket{0,-1,1,1} + \frac{3}{4\sqrt{5}} \ket{0,1,-1,1} - \frac{1}{\sqrt{5}} \ket{0,1,0,0} \\
+  & \; + \frac{3}{4\sqrt{5}} \ket{0,1,1,-1} - \frac{1}{4\sqrt{5}} \ket{1,-1,0,1} - \frac{1}{4\sqrt{5}} \ket{1,-1,1,0} - \frac{3}{4\sqrt{5}} \ket{1,0,-1,1} + \frac{1}{\sqrt{5}} \ket{1,0,0,0} - \frac{3}{4\sqrt{5}} \ket{1,0,1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[3,1],\,a=1} = \; &\sqrt{\frac{2}{15}} \ket{-1,-1,1,1} - \frac{1}{\sqrt{30}} \ket{-1,0,0,1} + \sqrt{\frac{2}{15}} \ket{-1,1,-1,1} - \sqrt{\frac{2}{15}} \ket{-1,1,1,-1} - \frac{1}{\sqrt{30}} \ket{0,-1,0,1} - \frac{1}{\sqrt{30}} \ket{0,0,-1,1} \\
+  & \; + \frac{1}{\sqrt{30}} \ket{0,0,1,-1} + \frac{1}{\sqrt{30}} \ket{0,1,0,-1} + \sqrt{\frac{2}{15}} \ket{1,-1,-1,1} - \sqrt{\frac{2}{15}} \ket{1,-1,1,-1} + \frac{1}{\sqrt{30}} \ket{1,0,0,-1} - \sqrt{\frac{2}{15}} \ket{1,1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[3,1],\,a=2} = \; &\frac{2}{\sqrt{15}} \ket{-1,-1,1,1} - \frac{1}{4\sqrt{15}} \ket{-1,0,0,1} - \frac{1}{4}\sqrt{\frac{3}{5}} \ket{-1,0,1,0} - \frac{1}{\sqrt{15}} \ket{-1,1,-1,1} + \frac{1}{\sqrt{15}} \ket{-1,1,1,-1} - \frac{1}{4\sqrt{15}} \ket{0,-1,0,1} \\
+  & \; - \frac{1}{4}\sqrt{\frac{3}{5}} \ket{0,-1,1,0} + \frac{1}{2\sqrt{15}} \ket{0,0,-1,1} - \frac{1}{2\sqrt{15}} \ket{0,0,1,-1} + \frac{1}{4}\sqrt{\frac{3}{5}} \ket{0,1,-1,0} + \frac{1}{4\sqrt{15}} \ket{0,1,0,-1} - \frac{1}{\sqrt{15}} \ket{1,-1,-1,1} \\
+  & \; + \frac{1}{\sqrt{15}} \ket{1,-1,1,-1} + \frac{1}{4}\sqrt{\frac{3}{5}} \ket{1,0,-1,0} + \frac{1}{4\sqrt{15}} \ket{1,0,0,-1} - \frac{2}{\sqrt{15}} \ket{1,1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[3,1],\,a=3} = \; &- \frac{1}{4\sqrt{5}} \ket{-1,0,0,1} - \frac{1}{4\sqrt{5}} \ket{-1,0,1,0} + \frac{1}{\sqrt{5}} \ket{-1,1,-1,1} - \frac{1}{2\sqrt{5}} \ket{-1,1,0,0} + \frac{1}{\sqrt{5}} \ket{-1,1,1,-1} + \frac{1}{4\sqrt{5}} \ket{0,-1,0,1} \\
+  & \; + \frac{1}{4\sqrt{5}} \ket{0,-1,1,0} - \frac{1}{4\sqrt{5}} \ket{0,1,-1,0} - \frac{1}{4\sqrt{5}} \ket{0,1,0,-1} - \frac{1}{\sqrt{5}} \ket{1,-1,-1,1} + \frac{1}{2\sqrt{5}} \ket{1,-1,0,0} - \frac{1}{\sqrt{5}} \ket{1,-1,1,-1} \\
+  & \; + \frac{1}{4\sqrt{5}} \ket{1,0,-1,0} + \frac{1}{4\sqrt{5}} \ket{1,0,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[3,1],\,a=1} = \; &\sqrt{\frac{2}{15}} \ket{-1,-1,1,0} - \frac{1}{\sqrt{30}} \ket{-1,0,0,0} - \frac{1}{\sqrt{30}} \ket{-1,0,1,-1} + \sqrt{\frac{2}{15}} \ket{-1,1,-1,0} - \frac{1}{\sqrt{30}} \ket{-1,1,0,-1} - \frac{1}{\sqrt{30}} \ket{0,-1,0,0} \\
+  & \; - \frac{1}{\sqrt{30}} \ket{0,-1,1,-1} - \frac{1}{\sqrt{30}} \ket{0,0,-1,0} + \sqrt{\frac{3}{10}} \ket{0,0,0,-1} - \frac{1}{\sqrt{30}} \ket{0,1,-1,-1} + \sqrt{\frac{2}{15}} \ket{1,-1,-1,0} - \frac{1}{\sqrt{30}} \ket{1,-1,0,-1} \\
+  & \; - \frac{1}{\sqrt{30}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[3,1],\,a=2} = \; &\frac{1}{2}\sqrt{\frac{3}{5}} \ket{-1,-1,0,1} + \frac{1}{2\sqrt{15}} \ket{-1,-1,1,0} - \frac{1}{4}\sqrt{\frac{3}{5}} \ket{-1,0,-1,1} - \frac{1}{\sqrt{15}} \ket{-1,0,0,0} - \frac{1}{4\sqrt{15}} \ket{-1,0,1,-1} - \frac{1}{4\sqrt{15}} \ket{-1,1,-1,0} \\
+  & \; + \frac{1}{4}\sqrt{\frac{5}{3}} \ket{-1,1,0,-1} - \frac{1}{4}\sqrt{\frac{3}{5}} \ket{0,-1,-1,1} - \frac{1}{\sqrt{15}} \ket{0,-1,0,0} - \frac{1}{4\sqrt{15}} \ket{0,-1,1,-1} + \frac{2}{\sqrt{15}} \ket{0,0,-1,0} - \frac{1}{\sqrt{15}} \ket{0,1,-1,-1} \\
+  & \; - \frac{1}{4\sqrt{15}} \ket{1,-1,-1,0} + \frac{1}{4}\sqrt{\frac{5}{3}} \ket{1,-1,0,-1} - \frac{1}{\sqrt{15}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[3,1],\,a=3} = \; &\frac{3}{4\sqrt{5}} \ket{-1,0,-1,1} - \frac{1}{\sqrt{5}} \ket{-1,0,0,0} + \frac{3}{4\sqrt{5}} \ket{-1,0,1,-1} + \frac{1}{4\sqrt{5}} \ket{-1,1,-1,0} + \frac{1}{4\sqrt{5}} \ket{-1,1,0,-1} - \frac{3}{4\sqrt{5}} \ket{0,-1,-1,1} \\
+  & \; + \frac{1}{\sqrt{5}} \ket{0,-1,0,0} - \frac{3}{4\sqrt{5}} \ket{0,-1,1,-1} - \frac{1}{2\sqrt{5}} \ket{0,1,-1,-1} - \frac{1}{4\sqrt{5}} \ket{1,-1,-1,0} - \frac{1}{4\sqrt{5}} \ket{1,-1,0,-1} + \frac{1}{2\sqrt{5}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[2,1,1],\,a=1} = \; &- \frac{1}{4} \ket{-1,1,0,1} + \frac{1}{4} \ket{-1,1,1,0} + \frac{1}{4} \ket{0,1,-1,1} - \frac{1}{4} \ket{0,1,1,-1} - \frac{1}{4} \ket{1,-1,0,1} + \frac{1}{4} \ket{1,-1,1,0} \\
+  & \; + \frac{1}{4} \ket{1,0,-1,1} - \frac{1}{4} \ket{1,0,1,-1} - \frac{1}{2} \ket{1,1,-1,0} + \frac{1}{2} \ket{1,1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[2,1,1],\,a=2} = \; &- \frac{1}{2\sqrt{3}} \ket{-1,0,1,1} - \frac{1}{4\sqrt{3}} \ket{-1,1,0,1} + \frac{\sqrt{3}}{4} \ket{-1,1,1,0} + \frac{1}{2\sqrt{3}} \ket{0,-1,1,1} + \frac{1}{4\sqrt{3}} \ket{0,1,-1,1} - \frac{\sqrt{3}}{4} \ket{0,1,1,-1} \\
+  & \; + \frac{1}{4\sqrt{3}} \ket{1,-1,0,1} - \frac{\sqrt{3}}{4} \ket{1,-1,1,0} - \frac{1}{4\sqrt{3}} \ket{1,0,-1,1} + \frac{\sqrt{3}}{4} \ket{1,0,1,-1}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=1,\,[2,1,1],\,a=3} = \; &- \frac{1}{\sqrt{6}} \ket{-1,0,1,1} + \frac{1}{\sqrt{6}} \ket{-1,1,0,1} + \frac{1}{\sqrt{6}} \ket{0,-1,1,1} - \frac{1}{\sqrt{6}} \ket{0,1,-1,1} - \frac{1}{\sqrt{6}} \ket{1,-1,0,1} + \frac{1}{\sqrt{6}} \ket{1,0,-1,1}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[2,1,1],\,a=1} = \; &- \frac{1}{4} \ket{-1,0,0,1} + \frac{1}{4} \ket{-1,0,1,0} - \frac{1}{4} \ket{0,-1,0,1} + \frac{1}{4} \ket{0,-1,1,0} + \frac{1}{2} \ket{0,0,-1,1} - \frac{1}{2} \ket{0,0,1,-1} \\
+  & \; - \frac{1}{4} \ket{0,1,-1,0} + \frac{1}{4} \ket{0,1,0,-1} - \frac{1}{4} \ket{1,0,-1,0} + \frac{1}{4} \ket{1,0,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[2,1,1],\,a=2} = \; &- \frac{\sqrt{3}}{4} \ket{-1,0,0,1} + \frac{1}{4\sqrt{3}} \ket{-1,0,1,0} + \frac{1}{2\sqrt{3}} \ket{-1,1,0,0} + \frac{\sqrt{3}}{4} \ket{0,-1,0,1} - \frac{1}{4\sqrt{3}} \ket{0,-1,1,0} + \frac{1}{4\sqrt{3}} \ket{0,1,-1,0} \\
+  & \; - \frac{\sqrt{3}}{4} \ket{0,1,0,-1} - \frac{1}{2\sqrt{3}} \ket{1,-1,0,0} - \frac{1}{4\sqrt{3}} \ket{1,0,-1,0} + \frac{\sqrt{3}}{4} \ket{1,0,0,-1}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=0,\,[2,1,1],\,a=3} = \; &- \frac{1}{\sqrt{6}} \ket{-1,0,1,0} + \frac{1}{\sqrt{6}} \ket{-1,1,0,0} + \frac{1}{\sqrt{6}} \ket{0,-1,1,0} - \frac{1}{\sqrt{6}} \ket{0,1,-1,0} - \frac{1}{\sqrt{6}} \ket{1,-1,0,0} + \frac{1}{\sqrt{6}} \ket{1,0,-1,0}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[2,1,1],\,a=1} = \; &- \frac{1}{2} \ket{-1,-1,0,1} + \frac{1}{2} \ket{-1,-1,1,0} + \frac{1}{4} \ket{-1,0,-1,1} - \frac{1}{4} \ket{-1,0,1,-1} - \frac{1}{4} \ket{-1,1,-1,0} + \frac{1}{4} \ket{-1,1,0,-1} \\
+  & \; + \frac{1}{4} \ket{0,-1,-1,1} - \frac{1}{4} \ket{0,-1,1,-1} - \frac{1}{4} \ket{1,-1,-1,0} + \frac{1}{4} \ket{1,-1,0,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[2,1,1],\,a=2} = \; &- \frac{\sqrt{3}}{4} \ket{-1,0,-1,1} + \frac{1}{4\sqrt{3}} \ket{-1,0,1,-1} + \frac{\sqrt{3}}{4} \ket{-1,1,-1,0} - \frac{1}{4\sqrt{3}} \ket{-1,1,0,-1} + \frac{\sqrt{3}}{4} \ket{0,-1,-1,1} - \frac{1}{4\sqrt{3}} \ket{0,-1,1,-1} \\
+  & \; - \frac{1}{2\sqrt{3}} \ket{0,1,-1,-1} - \frac{\sqrt{3}}{4} \ket{1,-1,-1,0} + \frac{1}{4\sqrt{3}} \ket{1,-1,0,-1} + \frac{1}{2\sqrt{3}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}}
+\begin{equation*}
+\begin{aligned}
+\ket{J=1,\,M=-1,\,[2,1,1],\,a=3} = \; &- \frac{1}{\sqrt{6}} \ket{-1,0,1,-1} + \frac{1}{\sqrt{6}} \ket{-1,1,0,-1} + \frac{1}{\sqrt{6}} \ket{0,-1,1,-1} - \frac{1}{\sqrt{6}} \ket{0,1,-1,-1} - \frac{1}{\sqrt{6}} \ket{1,-1,0,-1} + \frac{1}{\sqrt{6}} \ket{1,0,-1,-1}
+\end{aligned}
+\end{equation*}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=0,\,M=0,\,[4],\,a=1} = \; &\frac{2}{3\sqrt{5}} \ket{-1,-1,1,1} - \frac{1}{3\sqrt{5}} \ket{-1,0,0,1} - \frac{1}{3\sqrt{5}} \ket{-1,0,1,0} + \frac{2}{3\sqrt{5}} \ket{-1,1,-1,1} - \frac{1}{3\sqrt{5}} \ket{-1,1,0,0} + \frac{2}{3\sqrt{5}} \ket{-1,1,1,-1} \\
+  & \; - \frac{1}{3\sqrt{5}} \ket{0,-1,0,1} - \frac{1}{3\sqrt{5}} \ket{0,-1,1,0} - \frac{1}{3\sqrt{5}} \ket{0,0,-1,1} + \frac{1}{\sqrt{5}} \ket{0,0,0,0} - \frac{1}{3\sqrt{5}} \ket{0,0,1,-1} - \frac{1}{3\sqrt{5}} \ket{0,1,-1,0} \\
+  & \; - \frac{1}{3\sqrt{5}} \ket{0,1,0,-1} + \frac{2}{3\sqrt{5}} \ket{1,-1,-1,1} - \frac{1}{3\sqrt{5}} \ket{1,-1,0,0} + \frac{2}{3\sqrt{5}} \ket{1,-1,1,-1} - \frac{1}{3\sqrt{5}} \ket{1,0,-1,0} - \frac{1}{3\sqrt{5}} \ket{1,0,0,-1} \\
+  & \; + \frac{2}{3\sqrt{5}} \ket{1,1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=0,\,M=0,\,[2,2],\,a=1} = \; &- \frac{1}{3} \ket{-1,-1,1,1} + \frac{1}{6} \ket{-1,0,0,1} + \frac{1}{6} \ket{-1,0,1,0} + \frac{1}{6} \ket{-1,1,-1,1} - \frac{1}{3} \ket{-1,1,0,0} + \frac{1}{6} \ket{-1,1,1,-1} \\
+  & \; + \frac{1}{6} \ket{0,-1,0,1} + \frac{1}{6} \ket{0,-1,1,0} - \frac{1}{3} \ket{0,0,-1,1} - \frac{1}{3} \ket{0,0,1,-1} + \frac{1}{6} \ket{0,1,-1,0} + \frac{1}{6} \ket{0,1,0,-1} \\
+  & \; + \frac{1}{6} \ket{1,-1,-1,1} - \frac{1}{3} \ket{1,-1,0,0} + \frac{1}{6} \ket{1,-1,1,-1} + \frac{1}{6} \ket{1,0,-1,0} + \frac{1}{6} \ket{1,0,0,-1} - \frac{1}{3} \ket{1,1,-1,-1}
+\end{aligned}
+\end{equation*}}
+{\small
+\begin{equation*}
+\begin{aligned}
+\ket{J=0,\,M=0,\,[2,2],\,a=2} = \; &\frac{1}{2\sqrt{3}} \ket{-1,0,0,1} - \frac{1}{2\sqrt{3}} \ket{-1,0,1,0} - \frac{1}{2\sqrt{3}} \ket{-1,1,-1,1} + \frac{1}{2\sqrt{3}} \ket{-1,1,1,-1} - \frac{1}{2\sqrt{3}} \ket{0,-1,0,1} + \frac{1}{2\sqrt{3}} \ket{0,-1,1,0} \\
+  & \; + \frac{1}{2\sqrt{3}} \ket{0,1,-1,0} - \frac{1}{2\sqrt{3}} \ket{0,1,0,-1} + \frac{1}{2\sqrt{3}} \ket{1,-1,-1,1} - \frac{1}{2\sqrt{3}} \ket{1,-1,1,-1} - \frac{1}{2\sqrt{3}} \ket{1,0,-1,0} + \frac{1}{2\sqrt{3}} \ket{1,0,0,-1}
+\end{aligned}
+\end{equation*}}
+\newpage
+\section{Yamanouchi Orthogonal Representation Matrices}
+
+The $S_N$ irreducible representation matrices $D^{[\kappa]}(p)$ are
+given in the Yamanouchi orthogonal basis, indexed by standard Young tableaux.
+Below we list the matrices for the identity element and the adjacent transposition
+generators $s_i = (i,i+1)$. All other group elements are obtained by matrix
+multiplication of the generators.
+
+\subsection*{$S_2$}
+
+\subsubsection*{$[2]$ (dim=1)}
+
+$D^{[2]}(e) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+$D^{[2]}(s_1) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+\subsubsection*{$[1,1]$ (dim=1)}
+
+$D^{[1,1]}(e) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+$D^{[1,1]}(s_1) = \begin{pmatrix}
+  -1 \\
+\end{pmatrix}$
+
+
+\subsection*{$S_3$}
+
+\subsubsection*{$[3]$ (dim=1)}
+
+$D^{[3]}(e) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+$D^{[3]}(s_1) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+$D^{[3]}(s_2) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+\subsubsection*{$[2,1]$ (dim=2)}
+
+$D^{[2,1]}(e) = \begin{pmatrix}
+  1 & 0 \\
+  0 & 1 \\
+\end{pmatrix}$
+
+$D^{[2,1]}(s_1) = \begin{pmatrix}
+  1 & 0 \\
+  0 & -1 \\
+\end{pmatrix}$
+
+$D^{[2,1]}(s_2) = \begin{pmatrix}
+  -\frac{1}{2} & \frac{\sqrt{3}}{2} \\
+  \frac{\sqrt{3}}{2} & \frac{1}{2} \\
+\end{pmatrix}$
+
+\subsubsection*{$[1,1,1]$ (dim=1)}
+
+$D^{[1,1,1]}(e) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+$D^{[1,1,1]}(s_1) = \begin{pmatrix}
+  -1 \\
+\end{pmatrix}$
+
+$D^{[1,1,1]}(s_2) = \begin{pmatrix}
+  -1 \\
+\end{pmatrix}$
+
+
+\subsection*{$S_4$}
+
+\subsubsection*{$[4]$ (dim=1)}
+
+$D^{[4]}(e) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+$D^{[4]}(s_1) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+$D^{[4]}(s_2) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+$D^{[4]}(s_3) = \begin{pmatrix}
+  1 \\
+\end{pmatrix}$
+
+\subsubsection*{$[3,1]$ (dim=3)}
+
+$D^{[3,1]}(e) = \begin{pmatrix}
+  1 & 0 & 0 \\
+  0 & 1 & 0 \\
+  0 & 0 & 1 \\
+\end{pmatrix}$
+
+$D^{[3,1]}(s_1) = \begin{pmatrix}
+  1 & 0 & 0 \\
+  0 & 1 & 0 \\
+  0 & 0 & -1 \\
+\end{pmatrix}$
+
+$D^{[3,1]}(s_2) = \begin{pmatrix}
+  1 & 0 & 0 \\
+  0 & -\frac{1}{2} & \frac{\sqrt{3}}{2} \\
+  0 & \frac{\sqrt{3}}{2} & \frac{1}{2} \\
+\end{pmatrix}$
+
+$D^{[3,1]}(s_3) = \begin{pmatrix}
+  -\frac{1}{3} & \frac{\sqrt{8}}{3} & 0 \\
+  \frac{\sqrt{8}}{3} & \frac{1}{3} & 0 \\
+  0 & 0 & 1 \\
+\end{pmatrix}$
+
+\subsubsection*{$[2,2]$ (dim=2)}
+
+$D^{[2,2]}(e) = \begin{pmatrix}
+  1 & 0 \\
+  0 & 1 \\
+\end{pmatrix}$
+
+$D^{[2,2]}(s_1) = \begin{pmatrix}
+  1 & 0 \\
+  0 & -1 \\
+\end{pmatrix}$
+
+$D^{[2,2]}(s_2) = \begin{pmatrix}
+  -\frac{1}{2} & \frac{\sqrt{3}}{2} \\
+  \frac{\sqrt{3}}{2} & \frac{1}{2} \\
+\end{pmatrix}$
+
+$D^{[2,2]}(s_3) = \begin{pmatrix}
+  1 & 0 \\
+  0 & -1 \\
+\end{pmatrix}$
+
+\subsubsection*{$[2,1,1]$ (dim=3)}
+
+$D^{[2,1,1]}(e) = \begin{pmatrix}
+  1 & 0 & 0 \\
+  0 & 1 & 0 \\
+  0 & 0 & 1 \\
+\end{pmatrix}$
+
+$D^{[2,1,1]}(s_1) = \begin{pmatrix}
+  1 & 0 & 0 \\
+  0 & -1 & 0 \\
+  0 & 0 & -1 \\
+\end{pmatrix}$
+
+$D^{[2,1,1]}(s_2) = \begin{pmatrix}
+  -\frac{1}{2} & \frac{\sqrt{3}}{2} & 0 \\
+  \frac{\sqrt{3}}{2} & \frac{1}{2} & 0 \\
+  0 & 0 & -1 \\
+\end{pmatrix}$
+
+$D^{[2,1,1]}(s_3) = \begin{pmatrix}
+  -1 & 0 & 0 \\
+  0 & -\frac{1}{3} & \frac{\sqrt{8}}{3} \\
+  0 & \frac{\sqrt{8}}{3} & \frac{1}{3} \\
+\end{pmatrix}$
+
+\end{document}

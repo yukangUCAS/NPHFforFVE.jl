@@ -1,0 +1,20 @@
+name = "NPHFforFVE"
+uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+authors = ["yukang"]
+version = "0.1.0"
+
+[deps]
+JuMinuit = "5523a57a-07f4-4aae-a9fd-d526bcb5d194"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[compat]
+JuMinuit = "0.4.0"
+StaticArrays = "1"
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

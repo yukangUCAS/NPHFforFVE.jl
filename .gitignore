@@ -1,0 +1,10 @@
+# Julia
+Manifest.toml
+
+# Demo outputs
+demo/slides.html
+
+# System files
+.DS_Store
+__pycache__/
+*.pyc
