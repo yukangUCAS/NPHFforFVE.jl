@@ -522,7 +522,7 @@ end
 # 多物种自旋组态生成
 function _spin_values_float(spin::Float64)
     n = Int(2 * spin + 1)
-    return [Float64(-spin + i) for i in 0:(n-1)]
+    return [Float64(spin - i) for i in 0:(n-1)]  # 降序，与 _spin_values 一致
 end
 
 function _multi_spin_tuples(zero_counts::Vector{Int}, spins::Vector{Float64})
@@ -734,13 +734,23 @@ end
 function _wigner_D_for_element(j::Rational{Int}, g::SMatrix{3,3,Int},
                                g_idx::Int, n_base::Int)
     # 提取正常转动部分: 非正常转动 g 可写为 -R，其中 R 为正常转动
-    R = det(g) < 0 ? Float64.(-g) : Float64.(g)
-    n, omega = _rotation_axis_angle(R)
+    R_int = det(g) < 0 ? SMatrix{3,3,Int}(-g) : g
 
     if j == 1//2
-        D = SymmetryGroup._wigner_D_half(n, omega)
+        # 使用 Oh 表的 SU(2) 提升，与 helicity_phase 一致
+        D = SymmetryGroup._OH_PROPER_SU2[R_int]
     elseif j == 1//1
-        D = SymmetryGroup._wigner_D_one(n, omega)
+        # 找到 R_int 在 Oh 表中的索引，使用一致的轴-角参数
+        R_idx = findfirst(x -> x == R_int, SymmetryGroup._OH_ALL[1:24])
+        if R_idx === nothing
+            # fallback: 直接计算轴-角
+            R = Float64.(R_int)
+            n, omega = _rotation_axis_angle(R)
+            D = SymmetryGroup._wigner_D_one(n, omega)
+        else
+            n, omega = SymmetryGroup._OH_ROTATION_PARAMS[R_idx]
+            D = SymmetryGroup._wigner_D_one(n, omega)
+        end
     else
         throw(ArgumentError("Unsupported spin j=$j"))
     end
@@ -809,7 +819,7 @@ function build_I_matrix_zero_momentum(M::Int, j::Rational{Int},
     sm_snm = _SM_x_SNM_elements(N, M)
 
     # 预计算所有群元的 Wigner D 矩阵
-    wigner_Ds = [_wigner_D_for_element(j, g_idx, n_base) for g_idx in 1:length(group_elements)]
+    wigner_Ds = [_wigner_D_for_element(j, group_elements[g_idx], g_idx, n_base) for g_idx in 1:length(group_elements)]
 
     fermion = (species_type == :fermion)
     orig_vec = collect(n_tuple)
@@ -951,7 +961,7 @@ function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
     for k in 1:K
         if zero_counts[k] > 0 && spins[k] != 0.0
             wigner_Ds_by_species[k] = [
-                _wigner_D_for_element(Rational{Int}(Int(2*spins[k]), 2), g_idx, n_base)
+                _wigner_D_for_element(Rational{Int}(Int(2*spins[k]), 2), group_elements[g_idx], g_idx, n_base)
                 for g_idx in 1:length(group_elements)]
             vals = _spin_values_float(spins[k])
             spin_to_dj_by_species[k] = Dict(v => i for (i, v) in enumerate(vals))
@@ -1072,11 +1082,14 @@ function lowdin_orthogonalize(I::Matrix{ComplexF64}; tol::Float64=1e-12)
     # 厄米对角化
     evals, evecs = eigen(Hermitian(I))
 
-    # 筛选非零本征值
+    # 筛选非零本征值（相对容差避免数值噪声误判）
+    max_ev = maximum(abs, evals)
+    threshold = max(tol, max_ev * 1e-12)
+
     nonzero_idx = Int[]
     nonzero_vals = Float64[]
     for (k, val) in enumerate(evals)
-        if abs(val) > tol
+        if abs(val) > threshold
             push!(nonzero_idx, k)
             push!(nonzero_vals, real(val))
         end
@@ -1534,7 +1547,7 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
     end
 
     # Wigner D 矩阵
-    wigner_Ds = [_wigner_D_for_element(j, g_idx, n_base) for g_idx in 1:nG]
+    wigner_Ds = [_wigner_D_for_element(j, group_elements[g_idx], g_idx, n_base) for g_idx in 1:nG]
 
     # 自旋值 → D 矩阵索引
     spin_vals = _spin_values(j)
@@ -1760,7 +1773,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
     for k in 1:K
         if zero_counts[k] > 0 && spins[k] != 0.0
             wigner_Ds_by_species[k] = [
-                _wigner_D_for_element(Rational{Int}(Int(2*spins[k]), 2), g_idx, n_base)
+                _wigner_D_for_element(Rational{Int}(Int(2*spins[k]), 2), group_elements[g_idx], g_idx, n_base)
                 for g_idx in 1:nG]
             vals = _spin_values_float(spins[k])
             spin_to_dj_by_species[k] = Dict(v => i for (i, v) in enumerate(vals))
@@ -2042,13 +2055,13 @@ function build_S_matrix_zero_momentum(M::Int, spin_tuples::Vector,
     for (σ_idx, σ) in enumerate(spin_tuples)
         for (fin_idx, (n_p, lam_p)) in enumerate(fin_subspace_states)
             Nfm = length(n_p)
-            row_blk_idx = (σ_idx - 1) * n_fin + fin_idx
-            row_rb = (row_blk_idx - 1) * dim_kappa + 1
+            col_blk_idx = (σ_idx - 1) * n_fin + fin_idx
+            col_cb = (col_blk_idx - 1) * dim_kappa + 1
 
             for (σp_idx, σp) in enumerate(spin_tuples)
                 for (finp_idx, (np_p, lamp_p)) in enumerate(fin_subspace_states)
-                    col_blk_idx = (σp_idx - 1) * n_fin + finp_idx
-                    col_cb = (col_blk_idx - 1) * dim_kappa + 1
+                    row_blk_idx = (σp_idx - 1) * n_fin + finp_idx
+                    row_rb = (row_blk_idx - 1) * dim_kappa + 1
 
                     blk = zeros(Float64, dim_kappa, dim_kappa)
 
@@ -2120,13 +2133,13 @@ function build_S_matrix_zero_momentum(zero_counts::Vector{Int},
 
     for (σ_idx, σ) in enumerate(spin_tuples)
         for (fin_idx, (n_p, lam_p)) in enumerate(fin_subspace_states)
-            row_blk_idx = (σ_idx - 1) * n_fin + fin_idx
-            row_rb = (row_blk_idx - 1) * dim_kappa + 1
+            col_blk_idx = (σ_idx - 1) * n_fin + fin_idx
+            col_cb = (col_blk_idx - 1) * dim_kappa + 1
 
             for (σp_idx, σp) in enumerate(spin_tuples)
                 for (finp_idx, (np_p, lamp_p)) in enumerate(fin_subspace_states)
-                    col_blk_idx = (σp_idx - 1) * n_fin + finp_idx
-                    col_cb = (col_blk_idx - 1) * dim_kappa + 1
+                    row_blk_idx = (σp_idx - 1) * n_fin + finp_idx
+                    row_rb = (row_blk_idx - 1) * dim_kappa + 1
 
                     blk = zeros(Float64, dim_kappa, dim_kappa)
 
@@ -2433,8 +2446,22 @@ function _subspace_projection_zero(n_tuple::NTuple{N,Momentum},
     spin_tuples = _multi_spin_tuples(zero_counts, spins)
     Nfm = N - M_total
     if Nfm > 0
-        fin_n = ntuple(i -> sorted_n[M_total + i], Nfm)
-        fin_lam = ntuple(i -> sorted_lam[M_total + i], Nfm)
+        # 从各物种 FM 部分提取: sorted_n/sorted_lam 保持物种分组，
+        # 每物种内 ZM 排前 FM 排后，不可用 sorted_n[M_total+1:end] 全局切片
+        fin_mom_vec = Momentum[]
+        fin_lam_vec = Float64[]
+        off = 0
+        for k in 1:length(species)
+            M_k = zero_counts[k]
+            Nk = species[k]
+            for i in (M_k + 1):Nk
+                push!(fin_mom_vec, sorted_n[off + i])
+                push!(fin_lam_vec, sorted_lam[off + i])
+            end
+            off += Nk
+        end
+        fin_n = Tuple(fin_mom_vec)
+        fin_lam = Tuple(fin_lam_vec)
         fin_species_vec = Int[species[k] - zero_counts[k] for k in 1:length(species)]
         fin_species_vec = Int[s for s in fin_species_vec if s > 0]
         fin_spins = Float64[spins[k] for k in 1:length(species) if species[k] > zero_counts[k]]
@@ -2446,14 +2473,35 @@ function _subspace_projection_zero(n_tuple::NTuple{N,Momentum},
         fin_states = [(Tuple{}(), Tuple{}())]
     end
 
+    # 按物种构造 (n, λ): 每物种内 ZM 前排 FM 后排，保持物种分组
+    # 这确保 per_spin (按物种展开) 与 full_n/full_lam 索引对齐
     zero_mom = Momentum(0, 0, 0)
-    zero_n = ntuple(_ -> zero_mom, M_total)
+    n_species = length(species)
     subspace_states = []
     for σ in spin_tuples
         for (fn, fl) in fin_states
-            full_n = (zero_n..., fn...)
-            full_lam = (σ..., fl...)
-            push!(subspace_states, (full_n, full_lam))
+            full_n_vec = Momentum[]
+            full_lam_vec = Float64[]
+            z_off = 0
+            f_off = 0
+            for k in 1:n_species
+                M_k = zero_counts[k]
+                Nk = species[k]
+                Fk = Nk - M_k
+                # ZM 粒子 (物种 k)
+                for j in 1:M_k
+                    push!(full_n_vec, zero_mom)
+                    push!(full_lam_vec, σ[z_off + j])
+                end
+                z_off += M_k
+                # FM 粒子 (物种 k)
+                for j in 1:Fk
+                    push!(full_n_vec, fn[f_off + j])
+                    push!(full_lam_vec, fl[f_off + j])
+                end
+                f_off += Fk
+            end
+            push!(subspace_states, (Tuple(full_n_vec), Tuple(full_lam_vec)))
         end
     end
 

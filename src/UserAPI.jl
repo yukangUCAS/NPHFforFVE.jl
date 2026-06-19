@@ -114,8 +114,15 @@ function add_config!(proj::Project, L::Int, a::Real,
         throw(ArgumentError("irreps 和 n_levels 长度必须一致"))
 
     for Γ in irreps
-        (Γ in OH_IRREP_NAMES || Γ in OH2_IRREP_NAMES) ||
-            throw(ArgumentError("无效的不可约表示: $Γ"))
+        valid = Γ in OH_IRREP_NAMES || Γ in OH2_IRREP_NAMES
+        if !valid && proj.d != D000
+            has_fermion = any(ch -> isodd(sum(ch.species[i] for i in 1:length(ch.species) if ch.particle_types[i] == :fermion)), proj.channels)
+            _, group_name = group_for_momentum(proj.d; double_cover=has_fermion)
+            if haskey(LG_IRREP_NAMES, group_name)
+                valid = Γ in LG_IRREP_NAMES[group_name]
+            end
+        end
+        valid || throw(ArgumentError("无效的不可约表示: $Γ"))
     end
 
     push!(proj.configs, Config(L, Float64(a), irreps, n_levels))
@@ -442,7 +449,8 @@ function generate_potential_template(proj::Project)
     println(io, "#")
     println(io, "#   2. Fill in the my_V function below.")
     println(io, "#      Dispatch on (chA, chB) to select the channel pair,")
-    println(io, "#      then use (kapA, kapB, rA, rB, aA, aB) for isospin sub-channel.")
+    println(io, "#      then use (kapA, kapB, rA, rB) for isospin sub-channel.")
+    println(io, "#      (aA, aB are vestigial, always 1 — kept for signature compatibility.)")
     println(io, "#")
     println(io, "#   3. Define param_bounds / param_errors overrides at the bottom.")
     println(io, "#")
@@ -485,9 +493,13 @@ function generate_potential_template(proj::Project)
     println(io, "#   nA, nB : bra / ket momentum tuple  NTuple{N, Momentum}")
     println(io, "#   sp, s  : bra / ket spin projections  NTuple{N, Rational{Int}}")
     println(io, "#   kapA, kapB : S_N irrep label (String, or Tuple for multi-species)")
-    println(io, "#   rA, rB : multiplicity index      aA, aB : irrep column index")
+    println(io, "#   rA, rB : multiplicity index")
+    println(io, "#   aA, aB : vestigial (always 1, kept for API compatibility)")
     println(io, "#   chA, chB : channel index (see table below)")
     println(io, "#   params : MyParams instance")
+    println(io, "#")
+    println(io, "#   Return a dimA × dimB matrix (scalar if dimA=dimB=1) with")
+    println(io, "#   the V matrix elements between the given isospin sub-channels.")
     println(io, "#")
     println(io, "# IMPORTANT: V must be Hermitian: my_V(nA, nB, ..., chA, chB, L_phys, params)")
     println(io, "#            = conj(my_V(nB, nA, ..., chB, chA, L_phys, params))")
@@ -641,71 +653,22 @@ function _write_channel_pair_body(io, ch_α, ch_β, subs_α, subs_β,
         return
     end
 
-    same_group = ch_α.species == ch_β.species
-
-    if α == β
-        # 对角: Wigner-Eckart, κ + a 对角, 仅 reduced ME 依赖 r
-        println(io, "        # Same permutation group: κ-diagonal, a-diagonal")
-        println(io, "        kapA == kapB && aA == aB || return $(ret_prefix)0.0$(ret_suffix)")
-        println(io)
-        _write_same_group_branches_body(io, subs_α, subs_β; ret_prefix=ret_prefix, ret_suffix=ret_suffix)
-    elseif same_group
-        # 不同道但同置换群 (如 ρρ ↔ ππ, 均为 species=[2]): 仍适用 WE
-        println(io, "        # Same permutation group (different channels): κ-diagonal, a-diagonal")
-        println(io, "        kapA == kapB && aA == aB || return $(ret_prefix)0.0$(ret_suffix)")
-        println(io)
-        _write_same_group_branches_body(io, subs_α, subs_β; ret_prefix=ret_prefix, ret_suffix=ret_suffix)
-    else
-        # 不同置换群: 显式所有 (κ, r, a) 分支
-        println(io, "        # Different permutation groups: no Wigner-Eckart — explicit branches")
-        _write_diff_group_branches_body(io, subs_α, subs_β, ch_α.name, ch_β.name;
-                                        ret_prefix=ret_prefix, ret_suffix=ret_suffix)
-    end
+    # 显式枚举所有 (κ, r, a) 分支 — 不强制 Wigner-Eckart
+    _write_full_branches_body(io, subs_α, subs_β, ch_α.name, ch_β.name;
+                              ret_prefix=ret_prefix, ret_suffix=ret_suffix)
 end
 
 function _write_hermitian_conj_body(io, α, β)
     println(io, "        # WARNING: Hermitian conjugate — you must implement")
     println(io, "        #   return conj(my_V(nB, nA, s, sp, kapB, kapA, rB, rA, aB, aA, $β, $α, L_phys, params))")
-    println(io, "        # or write the explicit matrix element.")
+    println(io, "        # or write the explicit matrix element (remember V must be Hermitian as a matrix).")
     println(io, "        return conj(my_V(nB, nA, s, sp, kapB, kapA, rB, rA, aB, aA, $β, $α, L_phys, params))")
 end
 
-# ===== 同群分支 =====
+# ===== 通用分支（枚举所有 κ, r, a 组合，不强制 Wigner-Eckart） =====
 
-function _write_same_group_branches_body(io, subs_α, subs_β; ret_prefix="", ret_suffix="")
-    α_uniq = unique(s -> (s.κ, s.r), subs_α)
-    β_uniq = unique(s -> (s.κ, s.r), subs_β)
-    need_κ = _need_branch_value(subs_α, :κ)
-    need_r = _need_branch_value(subs_α, :r) || _need_branch_value(subs_β, :r)
-
-    if !need_κ && !need_r
-        s_α = α_uniq[1]
-        s_β = β_uniq[1]
-        println(io, "        # <$(s_α.κ), r=$(s_α.r) || V || $(s_β.κ), r=$(s_β.r)>")
-        println(io, "        error(\"TODO: fill reduced matrix element for κ=$(_escape_str(s_α.κ)), rA=$(s_α.r), rB=$(s_β.r)\")")
-        return
-    end
-
-    first = true
-    for s_α in α_uniq, s_β in β_uniq
-        s_α.κ == s_β.κ || continue
-        conds = String[]
-        need_κ && push!(conds, "kapA == $(repr(s_α.κ))")
-        need_r && push!(conds, "rA == $(s_α.r) && rB == $(s_β.r)")
-        keyword = first ? "if" : "elseif"
-        println(io, "        $keyword $(join(conds, " && "))")
-        println(io, "            # <$(s_α.κ), r=$(s_α.r) || V || $(s_β.κ), r=$(s_β.r)>")
-        println(io, "            error(\"TODO: fill reduced matrix element for κ=$(_escape_str(s_α.κ)), rA=$(s_α.r), rB=$(s_β.r)\")")
-        first = false
-    end
-    println(io, "        end")
-    println(io, "        error(\"unreachable: no matching (κ,r) branch for κ=\$(repr(kapA)) rA=\$rA rB=\$rB\")")
-end
-
-# ===== 不同群分支 =====
-
-function _write_diff_group_branches_body(io, subs_α, subs_β, name_α, name_β;
-                                        ret_prefix="", ret_suffix="")
+function _write_full_branches_body(io, subs_α, subs_β, name_α, name_β;
+                                   ret_prefix="", ret_suffix="")
     need_κ = _need_branch_value(subs_α, :κ) || _need_branch_value(subs_β, :κ)
     need_r = _need_branch_value(subs_α, :r) || _need_branch_value(subs_β, :r)
     need_a = _need_branch_value(subs_α, :a) || _need_branch_value(subs_β, :a)
@@ -714,8 +677,8 @@ function _write_diff_group_branches_body(io, subs_α, subs_β, name_α, name_β;
     if !any_branch
         s_α = subs_α[1]
         s_β = subs_β[1]
-        println(io, "        # <$(s_α.κ), r=$(s_α.r), a=$(s_α.a) | $(name_α)←$(name_β) | $(s_β.κ), r=$(s_β.r), a=$(s_β.a)>")
-        println(io, "        error(\"TODO: fill matrix element for $(name_α)←$(name_β), κA=$(_escape_str(s_α.κ)), κB=$(_escape_str(s_β.κ)), rA=$(s_α.r), rB=$(s_β.r), aA=$(s_α.a), aB=$(s_β.a)\")")
+        println(io, "        # <$(s_α.κ), r=$(s_α.r), a=$(s_α.a) | V | $(s_β.κ), r=$(s_β.r), a=$(s_β.a)>")
+        println(io, "        error(\"TODO: fill matrix element for κA=$(_escape_str(s_α.κ)), κB=$(_escape_str(s_β.κ)), rA=$(s_α.r), rB=$(s_β.r), aA=$(s_α.a), aB=$(s_β.a)\")")
         return
     end
 
@@ -727,12 +690,12 @@ function _write_diff_group_branches_body(io, subs_α, subs_β, name_α, name_β;
         need_a && push!(conds, "aA == $(s_α.a) && aB == $(s_β.a)")
         keyword = first ? "if" : "elseif"
         println(io, "        $keyword $(join(conds, " && "))")
-        println(io, "            # <$(s_α.κ), r=$(s_α.r), a=$(s_α.a) | $(name_α)←$(name_β) | $(s_β.κ), r=$(s_β.r), a=$(s_β.a)>")
-        println(io, "            error(\"TODO: fill matrix element for $(name_α)←$(name_β), κA=$(_escape_str(s_α.κ)), κB=$(_escape_str(s_β.κ)), rA=$(s_α.r), rB=$(s_β.r), aA=$(s_α.a), aB=$(s_β.a)\")")
+        println(io, "            # <$(s_α.κ), r=$(s_α.r), a=$(s_α.a) | V | $(s_β.κ), r=$(s_β.r), a=$(s_β.a)>")
+        println(io, "            error(\"TODO: fill matrix element for κA=$(_escape_str(s_α.κ)), κB=$(_escape_str(s_β.κ)), rA=$(s_α.r), rB=$(s_β.r), aA=$(s_α.a), aB=$(s_β.a)\")")
         first = false
     end
     println(io, "        end")
-    println(io, "        error(\"unreachable: no matching branch for $(name_α)←$(name_β), kapA=\$(repr(kapA)) kapB=\$(repr(kapB)) rA=\$rA rB=\$rB aA=\$aA aB=\$aB\")")
+    println(io, "        error(\"unreachable: no matching branch for kapA=\$(repr(kapA)) kapB=\$(repr(kapB)) rA=\$rA rB=\$rB aA=\$aA aB=\$aB\")")
 end
 
 # ============ V 模板辅助 ============

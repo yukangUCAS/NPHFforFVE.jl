@@ -74,7 +74,7 @@ function get_subspace_states(n_tuple::NTuple{N, Momentum},
     spin_float = Float64(spin)
     _, group_name = group_for_momentum(d)
     nG = length(group_elements(group_name))
-    needs_double = !isinteger(spin_float)
+    needs_double = !isinteger(N * spin_float)
     n_base = needs_double ? nG ÷ 2 : nG
     key = (n_tuple=n_tuple, lambda_tuple=lam_float, d=d, spin=spin_float)
     return get!(_SUBSPACE_STATE_CACHE, key) do

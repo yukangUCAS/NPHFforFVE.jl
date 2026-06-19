@@ -35,9 +35,10 @@ end
 - proj_by_irrep: 每个不可约表示 → ProjBlockData 列表
 """
 struct SubBasisData
-    kappa::String
+    kappa
     r_val::Int
-    a_val::Int
+    a_val::Int       # vestigial, always 1 since sub-channels no longer split by irrep column
+    dim_kappa::Int
     states::Vector
     state_to_idx::Dict
     per_spin::Vector{Rational{Int}}
@@ -91,7 +92,7 @@ function SystemBasis(sys::FockSystem)
         per_spin_raw, per_etas_arr = _expand_per_particle(ch)
         per_spin_v = Rational{Int}.(per_spin_raw)
         etas_v = Float64.(per_etas_arr)
-        spin_val = Float64(only(unique(per_spin_v)))
+        multi = length(ch.species) > 1
         per_mass = _expand_per_particle_mass(ch)
 
         subs = get_isospin_subchannels(ch, sys.I)
@@ -102,7 +103,12 @@ function SystemBasis(sys::FockSystem)
             all_states = []
             state_to_idx = Dict()
             for Gamma in sys.selected_irreps
-                projs = _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, spin_val, etas_v)
+                projs = if multi
+                    _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, Float64.(ch.spins), etas_v)
+                else
+                    spin_val = Float64(only(unique(per_spin_v)))
+                    _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, spin_val, etas_v)
+                end
                 for p in projs
                     for st in p.states
                         if !haskey(state_to_idx, st)
@@ -119,17 +125,24 @@ function SystemBasis(sys::FockSystem)
             # 3) 为每个不可约表示收集投影块
             proj_by_irrep = Dict{String, Vector{ProjBlockData}}()
             for Gamma in sys.selected_irreps
-                projs = _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, spin_val, etas_v)
+                projs = if multi
+                    _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, Float64.(ch.spins), etas_v)
+                else
+                    spin_val = Float64(only(unique(per_spin_v)))
+                    _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, spin_val, etas_v)
+                end
                 blocks = ProjBlockData[]
+                dim_κ = sub.dim
                 for p in projs
-                    row_idx = [state_to_idx[st] for st in p.states]
+                    spatial_idx = [state_to_idx[st] for st in p.states]
+                    row_idx = Int[(i - 1) * dim_κ + a for i in spatial_idx for a in 1:dim_κ]
                     push!(blocks, ProjBlockData(p.X, p.n_r, row_idx))
                 end
                 irrep_total_dim[Gamma] += sum(b.n_r for b in blocks; init=0)
                 proj_by_irrep[Gamma] = blocks
             end
 
-            sub_list[si] = SubBasisData(sub.κ, sub.r, sub.a,
+            sub_list[si] = SubBasisData(sub.κ, sub.r, sub.a, sub.dim,
                                         all_states, state_to_idx, per_spin_v,
                                         per_mass, ch.kinetic_type, rot_coeffs, proj_by_irrep)
         end
@@ -169,19 +182,11 @@ function build_V_hel_blocks!(basis::SystemBasis, V_func::Function, params)
                     K_β = length(sd_β.states)
                     K_β == 0 && continue
 
-                    same_group = ch_α.species == ch_β.species
-
-                    if same_group
-                        # Wigner-Eckart: κ 对角 + a 对角
-                        sd_α.kappa == sd_β.kappa && sd_α.a_val == sd_β.a_val || continue
-                        V_adapted = _V_adapter(V_func, sd_α.kappa, sd_α.kappa,
+                    V_adapted = _V_adapter(V_func, sd_α.kappa, sd_β.kappa,
                                                sd_α.r_val, sd_β.r_val,
-                                               sd_α.a_val, sd_α.a_val, α, β, basis.L_phys, params)
-                    else
-                        V_adapted = _V_adapter(V_func, sd_α.kappa, sd_β.kappa,
-                                               sd_α.r_val, sd_β.r_val,
-                                               sd_α.a_val, sd_β.a_val, α, β, basis.L_phys, params)
-                    end
+                                               sd_α.a_val, sd_β.a_val,
+                                               sd_α.dim_kappa, sd_β.dim_kappa,
+                                               α, β, basis.L_phys, params)
 
                     V_hel = build_V_hel(sd_α.states, sd_β.states,
                                         sd_α.per_spin, sd_β.per_spin,
@@ -335,6 +340,25 @@ function _get_projection(n_tuple::NTuple{N, Momentum},
     end
 end
 
+function _get_projection(n_tuple::NTuple{N, Momentum},
+                         lambda_tuple::NTuple{N, Float64},
+                         kappa::Tuple, Gamma::String,
+                         d::Momentum,
+                         species::Vector{Int}, particle_types::Vector{Symbol},
+                         spins::Vector{Float64}, etas::Vector{Float64}) where N
+    key = (n_tuple=n_tuple, lambda_tuple=lambda_tuple,
+           kappa=kappa, Gamma=Gamma, d=d,
+           species=Tuple(species), pt=Tuple(particle_types),
+           spins=Tuple(spins), etas=Tuple(etas))
+    return get!(_PROJ_CACHE, key) do
+        res = subspace_projection(n_tuple, lambda_tuple, kappa, Gamma;
+                                  d_total=d, species=species,
+                                  particle_types=particle_types,
+                                  spins=spins, etas=etas)
+        (X=res.X, states=res.subspace_states, Z=res.Z)
+    end
+end
+
 # ============ 工具函数 ============
 
 function _expand_per_particle(ch::FockChannel)
@@ -387,6 +411,92 @@ function _get_channel_proj_list(ch::FockChannel, Ncut::Int, d::Momentum,
                     proj = _get_projection(rep, lam_f, kappa, Gamma, d, spin, etas)
                     if length(proj.Z) > 0
                         push!(result, (rep=rep, lam=lam_f, X=proj.X,
+                                       states=proj.states, Z=proj.Z, n_r=length(proj.Z)))
+                    end
+                end
+            end
+        end
+        result
+    end
+end
+
+function _get_channel_proj_list(ch::FockChannel, Ncut::Int, d::Momentum,
+                                kappa::Tuple, Gamma::String,
+                                spins::Vector{Float64}, etas::Vector{Float64})
+    key = (species=Tuple(ch.species), pt=Tuple(ch.particle_types),
+           Ncut=Ncut, d=d, kappa=kappa, Gamma=Gamma,
+           spins=Tuple(spins), etas=Tuple(etas))
+    return get!(_PROJ_LIST_CACHE, key) do
+        result = []
+        reps = get_momentum_reps(ch.species, ch.particle_types, Ncut, d)
+        for rep in reps
+            hels = get_helicity_reps(rep, ch.species, ch.particle_types, ch.spins, d)
+            if !isempty(hels)
+                for lam in hels
+                    lam_f = Tuple(Float64.(lam))
+                    proj = _get_projection(rep, lam_f, kappa, Gamma, d,
+                                           ch.species, ch.particle_types, spins, etas)
+                    if length(proj.Z) > 0
+                        push!(result, (rep=rep, lam=lam_f, X=proj.X,
+                                       states=proj.states, Z=proj.Z, n_r=length(proj.Z)))
+                    end
+                end
+            else
+                N_total = length(rep)
+                M_total = count(n -> iszero(n), rep)
+                N_fin = N_total - M_total
+
+                fin_momenta = Momentum[]
+                fin_species_vec = Int[]
+                fin_types_vec = Symbol[]
+                fin_spins_vec = Rational{Int}[]
+                off = 0
+                for (k, Nk) in enumerate(ch.species)
+                    fm_in_sp = 0
+                    for i in 1:Nk
+                        !iszero(rep[off + i]) && (fm_in_sp += 1)
+                    end
+                    if fm_in_sp > 0
+                        push!(fin_species_vec, fm_in_sp)
+                        push!(fin_types_vec, ch.particle_types[k])
+                        push!(fin_spins_vec, Rational{Int}(Int(2*ch.spins[k]), 2))
+                        for i in 1:Nk
+                            !iszero(rep[off + i]) && push!(fin_momenta, rep[off + i])
+                        end
+                    end
+                    off += Nk
+                end
+
+                if N_fin > 0
+                    fin_rep = Tuple(fin_momenta)
+                    fin_hels = get_helicity_reps(fin_rep, fin_species_vec,
+                        fin_types_vec, fin_spins_vec, d)
+                else
+                    fin_hels = [()]
+                end
+
+                for fin_lam in fin_hels
+                    fin_lam_f = Float64[Float64(x) for x in fin_lam]
+                    full_lam_vec = Float64[]
+                    fm_idx = 1
+                    off2 = 0
+                    for (k, Nk) in enumerate(ch.species)
+                        for i in 1:Nk
+                            if iszero(rep[off2 + i])
+                                push!(full_lam_vec, 0.0)
+                            else
+                                push!(full_lam_vec, fin_lam_f[fm_idx])
+                                fm_idx += 1
+                            end
+                        end
+                        off2 += Nk
+                    end
+                    full_lam = Tuple(full_lam_vec)
+
+                    proj = _get_projection(rep, full_lam, kappa, Gamma, d,
+                                           ch.species, ch.particle_types, spins, etas)
+                    if length(proj.Z) > 0
+                        push!(result, (rep=rep, lam=full_lam, X=proj.X,
                                        states=proj.states, Z=proj.Z, n_r=length(proj.Z)))
                     end
                 end
@@ -512,9 +622,12 @@ end
 
 # ============ V 函数参数重排适配器 ============
 # build_V_hel 调用: V_inner(n_α, σ_α, n_β, σ_β, extra_args...)
-# 用户 V_func:      V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, params)
+# 用户 V_func:      V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, params)
+#
+# 注: 修改 1 去除子道 a-循环后, aA/aB 恒为 1, V_func 直接返回 dimA×dimB 矩阵
+#     (dim=1 时即标量), _V_adapter 统一透传, 不再做矩阵包装.
 
-function _V_adapter(V_func, kapA, kapB, rA, rB, aA, aB, ch_α, ch_β, L_phys, params)
+function _V_adapter(V_func, kapA, kapB, rA, rB, aA, aB, dimA, dimB, ch_α, ch_β, L_phys, params)
     return (n_α, σ_α, n_β, σ_β, extra...) ->
         V_func(n_α, n_β, σ_α, σ_β, kapA, kapB, rA, rB, aA, aB, ch_α, ch_β, L_phys, params)
 end
@@ -580,13 +693,18 @@ function build_hamiltonian_block(sys::FockSystem, Gamma::String,
         per_spin, per_etas_arr = _expand_per_particle(ch)
         per_spin_v = Rational{Int}.(per_spin)
         etas_v = Float64.(per_etas_arr)
-        spin_val = Float64(only(unique(per_spin_v)))
+        multi = length(ch.species) > 1
         per_mass = _expand_per_particle_mass(ch)
 
         subs = get_isospin_subchannels(ch, I)
         sub_entries = []
         for sub in subs
-            projs = _get_channel_proj_list(ch, ncut, d, sub.κ, Gamma, spin_val, etas_v)
+            projs = if multi
+                _get_channel_proj_list(ch, ncut, d, sub.κ, Gamma, Float64.(ch.spins), etas_v)
+            else
+                spin_val = Float64(only(unique(per_spin_v)))
+                _get_channel_proj_list(ch, ncut, d, sub.κ, Gamma, spin_val, etas_v)
+            end
             push!(sub_entries, (sub=sub, projs=projs, per_spin=per_spin_v))
         end
         push!(chan_sub_data, (ch=ch, subs=sub_entries, per_mass=per_mass))
@@ -622,29 +740,16 @@ function build_hamiltonian_block(sys::FockSystem, Gamma::String,
                     pspin_β = se_β.per_spin
                     n_r_β = sum(p.n_r for p in projs_β; init=0)
 
-                    same_group = ch_α.species == ch_β.species
-
-                    if same_group
-                        # κ-diagonal + a-diagonal (Wigner-Eckart for SN)
-                        if s_α.κ != s_β.κ || s_α.a != s_β.a
-                            col_start += n_r_β
-                            continue
-                        end
-                    end
                     L_phys = Float64(sys.L) * sys.a
 
-                    if same_group
-                        V_adapted = _V_adapter(V_func, s_α.κ, s_α.κ,
-                                               s_α.r, s_β.r, s_α.a, s_α.a, α, β, L_phys, params)
-                    else
-                        V_adapted = _V_adapter(V_func, s_α.κ, s_β.κ,
-                                               s_α.r, s_β.r, s_α.a, s_β.a, α, β, L_phys, params)
-                    end
+                    V_adapted = _V_adapter(V_func, s_α.κ, s_β.κ,
+                                           s_α.r, s_β.r, s_α.a, s_β.a,
+                                           s_α.dim, s_β.dim, α, β, L_phys, params)
                     sub_block = _build_subchannel_block(
                         projs_α, projs_β, pspin_α, pspin_β, L_phys, V_adapted)
 
                     # 动能对角矩阵 (仅道对角 + 子道对角)
-                    if α == β && s_α.κ == s_β.κ && s_α.r == s_β.r && s_α.a == s_β.a
+                    if α == β && s_α.κ == s_β.κ && s_α.r == s_β.r
                         T_diag = _build_kinetic_diag(projs_α, chan_sub_data[α].per_mass,
                                                      L_phys, ch_α.kinetic_type; d=d)
                         sub_block += T_diag
@@ -789,11 +894,16 @@ function _channel_dim_for_irrep(sys::FockSystem, Gamma::String, α::Int)
     ncut = get_Ncut(sys, α)
     subs = get_isospin_subchannels(ch, sys.I)
     per_spin, per_etas = _expand_per_particle(ch)
-    spin_val = Float64(only(unique(Rational{Int}.(per_spin))))
     etas_v = Float64.(per_etas)
+    multi = length(ch.species) > 1
     dims = Int[]
     for sub in subs
-        projs = _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, spin_val, etas_v)
+        projs = if multi
+            _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, Float64.(ch.spins), etas_v)
+        else
+            spin_val = Float64(only(unique(Rational{Int}.(per_spin))))
+            _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, spin_val, etas_v)
+        end
         push!(dims, sum(p.n_r for p in projs; init=0))
     end
     return dims

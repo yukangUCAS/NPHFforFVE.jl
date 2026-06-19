@@ -97,12 +97,12 @@ get_num_species(ch::FockChannel) = length(ch.species)
 """
     IsospinSubChannel
 
-一个同位旋子道，由 (κ, r, a) 标识。
+一个同位旋子道，由 (κ, r) 标识。a 字段恒为 1 (已废弃)。
 
 - `κ`: S_N 不可约表示标签。单物种: String (如 \"[2,1]\")；
        多物种: NTuple{K,String} (如 (\"[2]\", \"[1]\") 表示 S₂×S₁)
 - `r::Int`: 多重度标号 (1 ≤ r ≤ multiplicity)
-- `a::Int`: 表示列指标 (1 ≤ a ≤ dim(κ))，dim = ∏ dim(κₛ)
+- `a::Int`: 已废弃，恒为 1。X 矩阵已包含完整 dim(κ) 行空间。
 - `dim::Int`: dim(κ)，即不可约表示总维度
 - `mult::Int`: 该 κ 的重数
 """
@@ -133,9 +133,7 @@ function get_isospin_subchannels(ch::FockChannel, I::Rational{Int})
         J == I || continue
         dim_κ = get_SN_irrep_dim(N_spec, κ)
         for r in 1:mult
-            for a in 1:dim_κ
-                push!(sub_channels, IsospinSubChannel(κ, r, a, dim_κ, mult))
-            end
+            push!(sub_channels, IsospinSubChannel(κ, r, 1, dim_κ, mult))
         end
     end
     return sub_channels
@@ -151,9 +149,7 @@ function _multi_species_subchannels(ch::FockChannel, I::Rational{Int})
         end
         total_mult = entry.coupling_mult * entry.internal_mult
         for r in 1:total_mult
-            for a in 1:dim_κ
-                push!(sub_channels, IsospinSubChannel(entry.κ_tuple, r, a, dim_κ, total_mult))
-            end
+            push!(sub_channels, IsospinSubChannel(entry.κ_tuple, r, 1, dim_κ, total_mult))
         end
     end
     return sub_channels
@@ -347,7 +343,7 @@ function setup_fock_system()
     end
 
     # 确定对称群（考虑费米子 → 双覆盖）
-    has_fermion = any(ch -> any(pt -> pt == :fermion, ch.particle_types), channels)
+    has_fermion = any(ch -> isodd(sum(ch.species[i] for i in 1:length(ch.species) if ch.particle_types[i] == :fermion)), channels)
     _, group_name = group_for_momentum(d; double_cover=has_fermion)
     available_irreps = _get_irrep_list(group_name)
     println("\n对称群: $group_name (has_fermion=$has_fermion)")

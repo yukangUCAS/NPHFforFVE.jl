@@ -1,12 +1,12 @@
 # ==========================================================================
-# πN → πN 运动系测试 (主体代码端到端验证)
+# ρN → ρN 运动系测试 (主体代码端到端验证)
 #
 # 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
 # 对每个 (d_total, Γ):
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
 #   验证: eig(H_proj) ⊂ evals_full (参考谱)
 #
-# π: s=0, I=1, boson,  η=+1, m=139.57 MeV
+# ρ: s=1, I=1, boson,  η=-1, m=770 MeV
 # N: s=1/2, I=1/2, fermion, η=+1, m=938.92 MeV
 # 可区分粒子 → species=[1,1], κ=("[1]","[1]"), S=I
 # 运动系: D001 (C4v2), D011 (C2v2), D111 (C3v2)
@@ -15,26 +15,26 @@
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
 
 const SG            = NPHFforFVE.SymmetryGroup
-const M_piN         = NPHFforFVE.Momentum
-const m_π           = 139.57
-const m_N_piN       = 938.92
-const L0_piN        = 48
-const a_piN         = 0.1
-const L_phys_piN    = L0_piN * a_piN
-const hc_piN        = 197.327
-const Ncut_piN      = 20
-const C0_piN        = 1.0e-5
-const Lambda_piN    = 1000.0
-const pv_piN        = 2π * hc_piN / L_phys_piN
-const Lambda2_piN   = Lambda_piN^2
-const per_mass_piN  = [m_π, m_N_piN]
-const per_spin_piN  = Rational{Int}[0//1, 1//2]
-const spin_piN      = Float64[0.0, 0.5]
-const etas_piN      = Float64[1.0, 1.0]
-const species_piN   = [1, 1]
-const ptypes_piN    = [:boson, :fermion]
-const kappa_piN     = ("[1]", "[1]")
-const N_α_piN       = 2
+const M_rhoN        = NPHFforFVE.Momentum
+const m_ρ           = 770.0
+const m_N_rhoN      = 938.92
+const L0_rhoN       = 48
+const a_rhoN        = 0.1
+const L_phys_rhoN   = L0_rhoN * a_rhoN
+const hc_rhoN       = 197.327
+const Ncut_rhoN     = 15
+const C0_rhoN       = 4.0e-5
+const Lambda_rhoN   = 1000.0
+const pv_rhoN       = 2π * hc_rhoN / L_phys_rhoN
+const Lambda2_rhoN  = Lambda_rhoN^2
+const per_mass_rhoN = [m_ρ, m_N_rhoN]
+const per_spin_rhoN = Rational{Int}[1//1, 1//2]
+const spin_rhoN     = Float64[1.0, 0.5]
+const etas_rhoN     = Float64[-1.0, 1.0]
+const species_rhoN  = [1, 1]
+const ptypes_rhoN   = [:boson, :fermion]
+const kappa_rhoN    = ("[1]", "[1]")
+const N_α_rhoN      = 2
 
 function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
     distinct = Float64[]
@@ -48,45 +48,45 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 参考谱构造 (含 ZM 态处理 — 仅 N 有 spin≠0 时可能触发)
+# 参考谱构造 (含 ZM 态处理)
 # ============================================================================
-function _has_zm_spin_piN(rep)
-    for i in 1:N_α_piN
-        if iszero(rep[i]) && spin_piN[i] != 0.0
+function _has_zm_spin_rhoN(rep)
+    for i in 1:N_α_rhoN
+        if iszero(rep[i]) && spin_rhoN[i] != 0.0
             return true
         end
     end
     return false
 end
 
-function _gen_hel_labels_piN(rep, d_total)
-    if !_has_zm_spin_piN(rep)
+function _gen_hel_labels_rhoN(rep, d_total)
+    if !_has_zm_spin_rhoN(rep)
         h_reps = try
             NPHFforFVE.helicity_representatives(rep;
-                species=species_piN, particle_types=ptypes_piN,
-                spins=spin_piN, d=d_total)
+                species=species_rhoN, particle_types=ptypes_rhoN,
+                spins=spin_rhoN, d=d_total)
         catch
-            [ntuple(_ -> 0.0, N_α_piN)]
+            [ntuple(_ -> 0.0, N_α_rhoN)]
         end
         return [Tuple(Float64.(hel)) for hel in h_reps]
     end
 
     # ZM+spin: FM-only helicity reps + 0.0 placeholders at ZM positions
-    N_fin = N_α_piN - count(n -> iszero(n), rep)
-    fin_momenta = M_piN[]
+    N_fin = N_α_rhoN - count(n -> iszero(n), rep)
+    fin_momenta = M_rhoN[]
     fin_species_vec = Int[]
     fin_types_vec = Symbol[]
     fin_spins_vec = Rational{Int}[]
     off = 0
-    for (k, Nk) in enumerate(species_piN)
+    for (k, Nk) in enumerate(species_rhoN)
         fm_in_sp = 0
         for i in 1:Nk
             !iszero(rep[off + i]) && (fm_in_sp += 1)
         end
         if fm_in_sp > 0
             push!(fin_species_vec, fm_in_sp)
-            push!(fin_types_vec, ptypes_piN[k])
-            push!(fin_spins_vec, Rational{Int}(Int(2*spin_piN[k]), 2))
+            push!(fin_types_vec, ptypes_rhoN[k])
+            push!(fin_spins_vec, Rational{Int}(Int(2*spin_rhoN[k]), 2))
             for i in 1:Nk
                 !iszero(rep[off + i]) && push!(fin_momenta, rep[off + i])
             end
@@ -113,7 +113,7 @@ function _gen_hel_labels_piN(rep, d_total)
         full = Float64[]
         fm_idx = 1
         off2 = 0
-        for (k, Nk) in enumerate(species_piN)
+        for (k, Nk) in enumerate(species_rhoN)
             for i in 1:Nk
                 if iszero(rep[off2 + i])
                     push!(full, 0.0)
@@ -129,21 +129,21 @@ function _gen_hel_labels_piN(rep, d_total)
     return result
 end
 
-function _build_piN_moving_reference(d_total, irrep_names)
-    reps = NPHFforFVE.find_representatives(N_α_piN; Ncut=Ncut_piN, d=d_total,
-        species=species_piN, particle_types=ptypes_piN)
+function _build_rhoN_moving_reference(d_total, irrep_names)
+    reps = NPHFforFVE.find_representatives(N_α_rhoN; Ncut=Ncut_rhoN, d=d_total,
+        species=species_rhoN, particle_types=ptypes_rhoN)
 
     all_states = []
     state_to_idx = Dict()
 
     for rep in reps
-        for hel_float in _gen_hel_labels_piN(rep, d_total)
+        for hel_float in _gen_hel_labels_rhoN(rep, d_total)
             for Gamma in irrep_names
                 result = NPHFforFVE.subspace_projection(rep, hel_float,
-                    kappa_piN, Gamma;
-                    d_total=d_total, species=species_piN,
-                    particle_types=ptypes_piN,
-                    spins=spin_piN, etas=etas_piN)
+                    kappa_rhoN, Gamma;
+                    d_total=d_total, species=species_rhoN,
+                    particle_types=ptypes_rhoN,
+                    spins=spin_rhoN, etas=etas_rhoN)
                 size(result.X, 2) == 0 && continue
                 for st in result.subspace_states
                     if !haskey(state_to_idx, st)
@@ -161,27 +161,28 @@ function _build_piN_moving_reference(d_total, irrep_names)
     # 动能 (CM-frame relativistic)
     T_diag = zeros(ComplexF64, K, K)
     for (idx, (n_tup, _)) in enumerate(all_states)
-        p_mov = [pv_piN .* Float64.(n_) for n_ in n_tup]
-        p_cm, _ = NPHFforFVE.boost_to_cm(p_mov, per_mass_piN, d_total, L_phys_piN)
-        T = sum(sqrt(m^2 + Float64(sum(abs2, p_))) for (p_, m) in zip(p_cm, per_mass_piN))
+        p_mov = [pv_rhoN .* Float64.(n_) for n_ in n_tup]
+        p_cm, _ = NPHFforFVE.boost_to_cm(p_mov, per_mass_rhoN, d_total, L_phys_rhoN)
+        T = sum(sqrt(m^2 + Float64(sum(abs2, p_))) for (p_, m) in zip(p_cm, per_mass_rhoN))
         T_diag[idx, idx] = T
     end
 
     # V_func (canonical spin basis)
     function V_can(np, sp, n, s, extra...)
-        sp[2] == s[2] || return zero(ComplexF64)   # N spin diagonal (π spin always 0)
-        p_mov = [pv_piN .* Float64.(ni) for ni in np]
-        k_mov = [pv_piN .* Float64.(ni) for ni in n]
-        p_cm, fb = NPHFforFVE.boost_to_cm(p_mov, per_mass_piN, d_total, L_phys_piN)
-        k_cm, fk = NPHFforFVE.boost_to_cm(k_mov, per_mass_piN, d_total, L_phys_piN)
-        ff_bra = prod(1 / (1 + Float64(sum(abs2, pc)) / Lambda2_piN)^2 for pc in p_cm)
-        ff_ket = prod(1 / (1 + Float64(sum(abs2, kc)) / Lambda2_piN)^2 for kc in k_cm)
-        ComplexF64(fb * C0_piN * ff_bra * ff_ket * fk)
+        sp[1] == s[1] || return zero(ComplexF64)
+        sp[2] == s[2] || return zero(ComplexF64)
+        p_mov = [pv_rhoN .* Float64.(ni) for ni in np]
+        k_mov = [pv_rhoN .* Float64.(ni) for ni in n]
+        p_cm, fb = NPHFforFVE.boost_to_cm(p_mov, per_mass_rhoN, d_total, L_phys_rhoN)
+        k_cm, fk = NPHFforFVE.boost_to_cm(k_mov, per_mass_rhoN, d_total, L_phys_rhoN)
+        ff_bra = prod(1 / (1 + Float64(sum(abs2, pc)) / Lambda2_rhoN)^2 for pc in p_cm)
+        ff_ket = prod(1 / (1 + Float64(sum(abs2, kc)) / Lambda2_rhoN)^2 for kc in k_cm)
+        ComplexF64(fb * C0_rhoN * ff_bra * ff_ket * fk)
     end
 
-    V_hel = NPHFforFVE.build_V_hel(all_states, all_states, per_spin_piN, per_spin_piN, V_can)
+    V_hel = NPHFforFVE.build_V_hel(all_states, all_states, per_spin_rhoN, per_spin_rhoN, V_can)
     dd = 3 * (2 + 2) - 6
-    fv = (2π * hc_piN / L_phys_piN)^(dd / 2)
+    fv = (2π * hc_rhoN / L_phys_rhoN)^(dd / 2)
     H_raw = T_diag + fv * V_hel
     evals_full = sort(real.(eigvals(Hermitian(H_raw))))
     evals_full = evals_full[isfinite.(evals_full)]
@@ -191,16 +192,17 @@ end
 # ============================================================================
 # 主代码 V_func
 # ============================================================================
-function _make_V_func_piN(d_total)
+function _make_V_func_rhoN(d_total)
     return function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
-        sp[2] == s[2] || return zero(ComplexF64)   # N spin diagonal
-        pv = 2π * hc_piN / L_phys
+        sp[1] == s[1] || return zero(ComplexF64)
+        sp[2] == s[2] || return zero(ComplexF64)
+        pv = 2π * hc_rhoN / L_phys
         p_mov = [pv .* Float64.(ni) for ni in nA]
         k_mov = [pv .* Float64.(ni) for ni in nB]
-        p_cm, fb = NPHFforFVE.boost_to_cm(p_mov, per_mass_piN, d_total, L_phys)
-        k_cm, fk = NPHFforFVE.boost_to_cm(k_mov, per_mass_piN, d_total, L_phys)
-        ff_bra = prod(1 / (1 + Float64(sum(abs2, pc)) / Lambda2_piN)^2 for pc in p_cm)
-        ff_ket = prod(1 / (1 + Float64(sum(abs2, kc)) / Lambda2_piN)^2 for kc in k_cm)
+        p_cm, fb = NPHFforFVE.boost_to_cm(p_mov, per_mass_rhoN, d_total, L_phys)
+        k_cm, fk = NPHFforFVE.boost_to_cm(k_mov, per_mass_rhoN, d_total, L_phys)
+        ff_bra = prod(1 / (1 + Float64(sum(abs2, pc)) / Lambda2_rhoN)^2 for pc in p_cm)
+        ff_ket = prod(1 / (1 + Float64(sum(abs2, kc)) / Lambda2_rhoN)^2 for kc in k_cm)
         ComplexF64(fb * p.C0 * ff_bra * ff_ket * fk)
     end
 end
@@ -208,7 +210,7 @@ end
 # ============================================================================
 # 验证函数
 # ============================================================================
-function _verify_piN_moving(sys, V_func, params, ref, free_Ts, label)
+function _verify_rhoN_moving(sys, V_func, params, ref, free_Ts, label)
     println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
     println()
     all_ok = true
@@ -236,39 +238,38 @@ end
 # ============================================================================
 # D001 (C4v2)
 # ============================================================================
-function _compute_moving_free_Ts(all_states, d_total, pv, per_mass, L_phys)
+function _compute_rhoN_moving_free_Ts(all_states, d_total)
     free_Ts = Float64[]
     for (nt, _) in all_states
-        p_mov = [pv .* Float64.(n_) for n_ in nt]
-        p_cm, _ = NPHFforFVE.boost_to_cm(p_mov, per_mass, d_total, L_phys)
-        T = sum(sqrt(m^2 + Float64(sum(abs2, p_))) for (p_, m) in zip(p_cm, per_mass))
+        p_mov = [pv_rhoN .* Float64.(n_) for n_ in nt]
+        p_cm, _ = NPHFforFVE.boost_to_cm(p_mov, per_mass_rhoN, d_total, L_phys_rhoN)
+        T = sum(sqrt(m^2 + Float64(sum(abs2, p_))) for (p_, m) in zip(p_cm, per_mass_rhoN))
         push!(free_Ts, T)
     end
     sort(unique!(free_Ts))
 end
 
-function test_piN_D001()
+function test_rhoN_D001()
     d_total = NPHFforFVE.D001
     irrep_names = SG.C4V_IRREP_NAMES
-    println("πN  D001 (C4v2)  Ncut=$Ncut_piN")
+    println("ρN  D001 (C4v2)  Ncut=$Ncut_rhoN")
     all_ok = true
 
-    ref = _build_piN_moving_reference(d_total, irrep_names)
-    free_Ts = distinct_levels(_compute_moving_free_Ts(ref.all_states, d_total,
-        pv_piN, per_mass_piN, L_phys_piN), 10)
+    ref = _build_rhoN_moving_reference(d_total, irrep_names)
+    free_Ts = distinct_levels(_compute_rhoN_moving_free_Ts(ref.all_states, d_total), 10)
     println("  reference eigenvalues = $(length(ref.evals_full))")
 
     for (isospin, label) in [(1//2, "I=1/2"), (3//2, "I=3/2")]
         println("\n  --- $label ---")
 
-        ch = FockChannel("piN", [1, 1], [:boson, :fermion],
-                         [m_π, m_N_piN], [0//1, 1//2], [1//1, 1//2],
-                         [1.0, 1.0], NPHFforFVE.relativistic)
-        sys = FockSystem(d_total, Ncut_piN, [ch], L0_piN, a_piN, isospin, irrep_names)
-        params = (C0=C0_piN,)
+        ch = FockChannel("rhoN", [1, 1], [:boson, :fermion],
+                         [m_ρ, m_N_rhoN], [1//1, 1//2], [1//1, 1//2],
+                         [-1.0, 1.0], NPHFforFVE.relativistic)
+        sys = FockSystem(d_total, Ncut_rhoN, [ch], L0_rhoN, a_rhoN, isospin, irrep_names)
+        params = (C0=C0_rhoN,)
 
-        ok = _verify_piN_moving(sys, _make_V_func_piN(d_total), params,
-                                ref.evals_full, free_Ts, "$label D001")
+        ok = _verify_rhoN_moving(sys, _make_V_func_rhoN(d_total), params,
+                                 ref.evals_full, free_Ts, "$label D001")
         all_ok = all_ok && ok
     end
     return all_ok
@@ -277,29 +278,28 @@ end
 # ============================================================================
 # D011 (C2v2)
 # ============================================================================
-function test_piN_D011()
+function test_rhoN_D011()
     d_total = NPHFforFVE.D011
     irrep_names = SG.C2V_IRREP_NAMES
     println("\n$(repeat("=", 60))")
-    println("πN  D011 (C2v2)  Ncut=$Ncut_piN")
+    println("ρN  D011 (C2v2)  Ncut=$Ncut_rhoN")
     all_ok = true
 
-    ref = _build_piN_moving_reference(d_total, irrep_names)
-    free_Ts = distinct_levels(_compute_moving_free_Ts(ref.all_states, d_total,
-        pv_piN, per_mass_piN, L_phys_piN), 10)
+    ref = _build_rhoN_moving_reference(d_total, irrep_names)
+    free_Ts = distinct_levels(_compute_rhoN_moving_free_Ts(ref.all_states, d_total), 10)
     println("  reference eigenvalues = $(length(ref.evals_full))")
 
     for (isospin, label) in [(1//2, "I=1/2"), (3//2, "I=3/2")]
         println("\n  --- $label ---")
 
-        ch = FockChannel("piN", [1, 1], [:boson, :fermion],
-                         [m_π, m_N_piN], [0//1, 1//2], [1//1, 1//2],
-                         [1.0, 1.0], NPHFforFVE.relativistic)
-        sys = FockSystem(d_total, Ncut_piN, [ch], L0_piN, a_piN, isospin, irrep_names)
-        params = (C0=C0_piN,)
+        ch = FockChannel("rhoN", [1, 1], [:boson, :fermion],
+                         [m_ρ, m_N_rhoN], [1//1, 1//2], [1//1, 1//2],
+                         [-1.0, 1.0], NPHFforFVE.relativistic)
+        sys = FockSystem(d_total, Ncut_rhoN, [ch], L0_rhoN, a_rhoN, isospin, irrep_names)
+        params = (C0=C0_rhoN,)
 
-        ok = _verify_piN_moving(sys, _make_V_func_piN(d_total), params,
-                                ref.evals_full, free_Ts, "$label D011")
+        ok = _verify_rhoN_moving(sys, _make_V_func_rhoN(d_total), params,
+                                 ref.evals_full, free_Ts, "$label D011")
         all_ok = all_ok && ok
     end
     return all_ok
@@ -308,29 +308,28 @@ end
 # ============================================================================
 # D111 (C3v2)
 # ============================================================================
-function test_piN_D111()
+function test_rhoN_D111()
     d_total = NPHFforFVE.D111
     irrep_names = SG.C3V_IRREP_NAMES
     println("\n$(repeat("=", 60))")
-    println("πN  D111 (C3v2)  Ncut=$Ncut_piN")
+    println("ρN  D111 (C3v2)  Ncut=$Ncut_rhoN")
     all_ok = true
 
-    ref = _build_piN_moving_reference(d_total, irrep_names)
-    free_Ts = distinct_levels(_compute_moving_free_Ts(ref.all_states, d_total,
-        pv_piN, per_mass_piN, L_phys_piN), 10)
+    ref = _build_rhoN_moving_reference(d_total, irrep_names)
+    free_Ts = distinct_levels(_compute_rhoN_moving_free_Ts(ref.all_states, d_total), 10)
     println("  reference eigenvalues = $(length(ref.evals_full))")
 
     for (isospin, label) in [(1//2, "I=1/2"), (3//2, "I=3/2")]
         println("\n  --- $label ---")
 
-        ch = FockChannel("piN", [1, 1], [:boson, :fermion],
-                         [m_π, m_N_piN], [0//1, 1//2], [1//1, 1//2],
-                         [1.0, 1.0], NPHFforFVE.relativistic)
-        sys = FockSystem(d_total, Ncut_piN, [ch], L0_piN, a_piN, isospin, irrep_names)
-        params = (C0=C0_piN,)
+        ch = FockChannel("rhoN", [1, 1], [:boson, :fermion],
+                         [m_ρ, m_N_rhoN], [1//1, 1//2], [1//1, 1//2],
+                         [-1.0, 1.0], NPHFforFVE.relativistic)
+        sys = FockSystem(d_total, Ncut_rhoN, [ch], L0_rhoN, a_rhoN, isospin, irrep_names)
+        params = (C0=C0_rhoN,)
 
-        ok = _verify_piN_moving(sys, _make_V_func_piN(d_total), params,
-                                ref.evals_full, free_Ts, "$label D111")
+        ok = _verify_rhoN_moving(sys, _make_V_func_rhoN(d_total), params,
+                                 ref.evals_full, free_Ts, "$label D111")
         all_ok = all_ok && ok
     end
     return all_ok
@@ -339,11 +338,11 @@ end
 # ============================================================================
 # 编排
 # ============================================================================
-function test_piN_moving()
-    ok1 = test_piN_D001()
-    ok2 = test_piN_D011()
-    ok3 = test_piN_D111()
+function test_rhoN_moving()
+    ok1 = test_rhoN_D001()
+    ok2 = test_rhoN_D011()
+    ok3 = test_rhoN_D111()
     return ok1 && ok2 && ok3
 end
 
-test_piN_moving()
+test_rhoN_moving()

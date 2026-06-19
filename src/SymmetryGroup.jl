@@ -735,6 +735,9 @@ const LG_IRREP_NAMES = Dict(
     :C4v => C4V_IRREP_NAMES,
     :C3v => C3V_IRREP_NAMES,
     :C2v => C2V_IRREP_NAMES,
+    :C4v2 => C4V_IRREP_NAMES,
+    :C3v2 => C3V_IRREP_NAMES,
+    :C2v2 => C2V_IRREP_NAMES,
 )
 
 # ---- 从生成元构建所有群元矩阵 ----

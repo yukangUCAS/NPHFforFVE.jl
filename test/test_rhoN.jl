@@ -1,5 +1,5 @@
 # ==========================================================================
-# πN → πN 测试 (主体代码端到端验证)
+# ρN → ρN 测试 (主体代码端到端验证)
 #
 # 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
 # 对每个不可约表示 Γ:
@@ -7,7 +7,7 @@
 #   evals_full = eig(H_raw)
 #   验证: eig(H_proj) ⊂ evals_full
 #
-# π: s=0, I=1, boson, η=-1, m=139.57 MeV
+# ρ: s=1, I=1, boson, η=-1, m=770 MeV
 # N: s=1/2, I=1/2, fermion, η=+1, m=938.92 MeV
 # 可区分粒子 → species=[1,1], κ=("[1]","[1]"), S=I
 #
@@ -17,34 +17,34 @@
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
 
-const M_piN      = NPHFforFVE.Momentum
-const m_π_piN    = 139.57
-const m_N_piN    = 938.92
-const Λ_piN      = 1000.0
-const L0_piN     = 48
-const a_piN      = 0.1
-const L_phys_piN = L0_piN * a_piN
-const ħc_piN     = 197.327
-const Ncut_piN   = 20
-const C0_piN     = 1.0e-5
+const M_rN      = NPHFforFVE.Momentum
+const m_ρ_rN    = 770.0
+const m_N_rN    = 938.92
+const Λ_rN      = 1000.0
+const L0_rN     = 48
+const a_rN      = 0.1
+const L_phys_rN = L0_rN * a_rN
+const ħc_rN     = 197.327
+const Ncut_rN   = 15
+const C0_rN     = 4.0e-5
 
-const pref_T_piN   = (2π * ħc_piN / L_phys_piN)^2
-const Λ_n²_piN     = (Λ_piN / (2π * ħc_piN / L_phys_piN))^2
-const fv_factor_piN = (2π * ħc_piN / L_phys_piN)^3
-const d_piN = M_piN(0,0,0)
+const pref_T_rN    = (2π * ħc_rN / L_phys_rN)^2
+const Λ_n²_rN      = (Λ_rN / (2π * ħc_rN / L_phys_rN))^2
+const fv_factor_rN  = (2π * ħc_rN / L_phys_rN)^3
+const d_rN = M_rN(0,0,0)
 
-const species_piN    = [1, 1]
-const particle_piN   = [:boson, :fermion]
-const N_α_piN        = 2
-const per_mass_piN   = [m_π_piN, m_N_piN]
-const per_spin_r_piN = Rational{Int}[0//1, 1//2]
-const spins_piN      = Float64[0.0, 0.5]
-const etas_piN       = Float64[-1.0, 1.0]
-const kappa_piN      = ("[1]", "[1]")
+const species_rN    = [1, 1]
+const particle_rN   = [:boson, :fermion]
+const N_α_rN        = 2
+const per_mass_rN   = [m_ρ_rN, m_N_rN]
+const per_spin_r_rN = Rational{Int}[1//1, 1//2]
+const spins_rN      = Float64[1.0, 0.5]
+const etas_rN       = Float64[-1.0, 1.0]
+const kappa_rN      = ("[1]", "[1]")
 
-const irrep_names_piN = NPHFforFVE.OH2_IRREP_NAMES
+const irrep_names_rN = NPHFforFVE.OH2_IRREP_NAMES
 
-ff_piN(n::Momentum) = 1.0 / (1.0 + sum(abs2, n) / Λ_n²_piN)^2
+ff_rN(n::Momentum) = 1.0 / (1.0 + sum(abs2, n) / Λ_n²_rN)^2
 
 function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
     distinct = Float64[]
@@ -58,20 +58,20 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 构造参考谱 (I=1/2 和 I=3/2 相同, 同位旋无关)
+# 构造参考谱
 # ============================================================================
-function _build_piN_reference()
+function _build_rhoN_reference()
     function V_can_func(np, sp, n, s, extra...)
-        σ_π_p, σ_N_p = sp
-        σ_π, σ_N = s
-        σ_π_p == σ_π || return zero(ComplexF64)
+        σ_ρ_p, σ_N_p = sp
+        σ_ρ, σ_N = s
+        σ_ρ_p == σ_ρ || return zero(ComplexF64)
         σ_N_p == σ_N || return zero(ComplexF64)
         n1p, n2p = np; n1, n2 = n
-        ComplexF64(C0_piN * ff_piN(n1p)*ff_piN(n1) * ff_piN(n2p)*ff_piN(n2))
+        ComplexF64(C0_rN * ff_rN(n1p)*ff_rN(n1) * ff_rN(n2p)*ff_rN(n2))
     end
 
-    reps = NPHFforFVE.find_representatives(N_α_piN; Ncut=Ncut_piN, d=d_piN,
-        species=species_piN, particle_types=particle_piN)
+    reps = NPHFforFVE.find_representatives(N_α_rN; Ncut=Ncut_rN, d=d_rN,
+        species=species_rN, particle_types=particle_rN)
 
     all_states = []
     state_to_idx = Dict()
@@ -80,21 +80,21 @@ function _build_piN_reference()
     for rep in reps
         h_reps = try
             NPHFforFVE.helicity_representatives(rep;
-                species=species_piN, particle_types=particle_piN,
-                spins=spins_piN, d=d_piN)
+                species=species_rN, particle_types=particle_rN,
+                spins=spins_rN, d=d_rN)
         catch
-            [ntuple(_ -> 0.0, N_α_piN)]
+            [ntuple(_ -> 0.0, N_α_rN)]
         end
 
         for hel in h_reps
             hel_float = Tuple(Float64.(hel))
 
-            for Gamma in irrep_names_piN
+            for Gamma in irrep_names_rN
                 result = NPHFforFVE.subspace_projection(rep, hel_float,
-                    kappa_piN, Gamma;
-                    d_total=d_piN, species=species_piN,
-                    particle_types=particle_piN,
-                    spins=spins_piN, etas=etas_piN)
+                    kappa_rN, Gamma;
+                    d_total=d_rN, species=species_rN,
+                    particle_types=particle_rN,
+                    spins=spins_rN, etas=etas_rN)
                 size(result.X, 2) == 0 && continue
 
                 for st in result.subspace_states
@@ -112,18 +112,18 @@ function _build_piN_reference()
 
     K = length(all_states)
 
-    # T_diag (S=I, distinguishable)
+    # T_diag (S=I)
     T_diag = zeros(ComplexF64, K, K)
     for (idx, (n_tup, _)) in enumerate(all_states)
-        T = sum(sqrt(m_^2 + pref_T_piN * Float64(sum(abs2, n_)))
-                for (n_, m_) in zip(n_tup, per_mass_piN))
+        T = sum(sqrt(m_^2 + pref_T_rN * Float64(sum(abs2, n_)))
+                for (n_, m_) in zip(n_tup, per_mass_rN))
         T_diag[idx, idx] = T
     end
 
     # V_hel + H_raw
     V_hel = NPHFforFVE.build_V_hel(all_states, all_states,
-                                     per_spin_r_piN, per_spin_r_piN, V_can_func)
-    H_raw = T_diag + fv_factor_piN * V_hel
+                                     per_spin_r_rN, per_spin_r_rN, V_can_func)
+    H_raw = T_diag + fv_factor_rN * V_hel
     evals_full = sort(real.(eigvals(Hermitian(H_raw))))
     evals_full = evals_full[isfinite.(evals_full)]
 
@@ -133,11 +133,11 @@ end
 # ============================================================================
 # 验证主体代码
 # ============================================================================
-function _verify_piN(sys, V_func, params, ref, free_Ts, label)
+function _verify_rhoN(sys, V_func, params, ref, free_Ts, label)
     println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
     println()
     all_ok = true
-    for Gamma in irrep_names_piN
+    for Gamma in irrep_names_rN
         H_proj = NPHFforFVE.build_hamiltonian_block(sys, Gamma, V_func, params)
         dim_total = size(H_proj, 1)
         dim_total == 0 && continue
@@ -161,72 +161,72 @@ end
 # ============================================================================
 # I=1/2
 # ============================================================================
-function test_piN_I12(ref, free_Ts)
-    println("πN → πN  I=1/2  Ncut=$Ncut_piN")
+function test_rhoN_I12(ref, free_Ts)
+    println("ρN → ρN  I=1/2  Ncut=$Ncut_rN")
     println("K = $(ref.K) states,  reference eigenvalues = $(length(ref.evals_full))")
 
-    ch = FockChannel("πN", [1,1], [:boson, :fermion],
-                     [m_π_piN, m_N_piN], [0//1, 1//2], [1//1, 1//2],
+    ch = FockChannel("ρN", [1,1], [:boson, :fermion],
+                     [m_ρ_rN, m_N_rN], [1//1, 1//2], [1//1, 1//2],
                      [-1.0, 1.0], NPHFforFVE.relativistic)
-    sys = FockSystem(NPHFforFVE.D000, Ncut_piN, [ch], L0_piN, a_piN, 1//2,
-                     irrep_names_piN)
-    params = (C0=C0_piN,)
+    sys = FockSystem(NPHFforFVE.D000, Ncut_rN, [ch], L0_rN, a_rN, 1//2,
+                     irrep_names_rN)
+    params = (C0=C0_rN,)
 
     function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
-        σ_π_p, σ_N_p = sp
-        σ_π, σ_N = s
-        σ_π_p == σ_π || return zero(ComplexF64)
+        σ_ρ_p, σ_N_p = sp
+        σ_ρ, σ_N = s
+        σ_ρ_p == σ_ρ || return zero(ComplexF64)
         σ_N_p == σ_N || return zero(ComplexF64)
         n1p, n2p = nA; n1, n2 = nB
-        ffall = ff_piN(n1p)*ff_piN(n1) * ff_piN(n2p)*ff_piN(n2)
+        ffall = ff_rN(n1p)*ff_rN(n1) * ff_rN(n2p)*ff_rN(n2)
         ComplexF64(p.C0 * ffall)
     end
 
-    return _verify_piN(sys, V_func, params, ref, free_Ts, "I=1/2")
+    return _verify_rhoN(sys, V_func, params, ref, free_Ts, "I=1/2")
 end
 
 # ============================================================================
 # I=3/2
 # ============================================================================
-function test_piN_I32(ref, free_Ts)
-    println("πN → πN  I=3/2  Ncut=$Ncut_piN")
+function test_rhoN_I32(ref, free_Ts)
+    println("ρN → ρN  I=3/2  Ncut=$Ncut_rN")
     println("K = $(ref.K) states,  reference eigenvalues = $(length(ref.evals_full))")
 
-    ch = FockChannel("πN", [1,1], [:boson, :fermion],
-                     [m_π_piN, m_N_piN], [0//1, 1//2], [1//1, 1//2],
+    ch = FockChannel("ρN", [1,1], [:boson, :fermion],
+                     [m_ρ_rN, m_N_rN], [1//1, 1//2], [1//1, 1//2],
                      [-1.0, 1.0], NPHFforFVE.relativistic)
-    sys = FockSystem(NPHFforFVE.D000, Ncut_piN, [ch], L0_piN, a_piN, 3//2,
-                     irrep_names_piN)
-    params = (C0=C0_piN,)
+    sys = FockSystem(NPHFforFVE.D000, Ncut_rN, [ch], L0_rN, a_rN, 3//2,
+                     irrep_names_rN)
+    params = (C0=C0_rN,)
 
     function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
-        σ_π_p, σ_N_p = sp
-        σ_π, σ_N = s
-        σ_π_p == σ_π || return zero(ComplexF64)
+        σ_ρ_p, σ_N_p = sp
+        σ_ρ, σ_N = s
+        σ_ρ_p == σ_ρ || return zero(ComplexF64)
         σ_N_p == σ_N || return zero(ComplexF64)
         n1p, n2p = nA; n1, n2 = nB
-        ffall = ff_piN(n1p)*ff_piN(n1) * ff_piN(n2p)*ff_piN(n2)
+        ffall = ff_rN(n1p)*ff_rN(n1) * ff_rN(n2p)*ff_rN(n2)
         ComplexF64(p.C0 * ffall)
     end
 
-    return _verify_piN(sys, V_func, params, ref, free_Ts, "I=3/2")
+    return _verify_rhoN(sys, V_func, params, ref, free_Ts, "I=3/2")
 end
 
 # ============================================================================
 # 编排
 # ============================================================================
-function test_piN()
-    ref = _build_piN_reference()
+function test_rhoN()
+    ref = _build_rhoN_reference()
     free_Ts = sort(unique(Float64[
-        sum(sqrt(m_^2 + pref_T_piN * Float64(sum(abs2, n_)))
-            for (n_, m_) in zip(nt, per_mass_piN))
+        sum(sqrt(m_^2 + pref_T_rN * Float64(sum(abs2, n_)))
+            for (n_, m_) in zip(nt, per_mass_rN))
         for (nt, _) in ref.all_states]))
     free_Ts_d = distinct_levels(free_Ts, 10)
-    ok12 = test_piN_I12(ref, free_Ts_d)
+    ok12 = test_rhoN_I12(ref, free_Ts_d)
     println(repeat("=", 60))
     println()
-    ok32 = test_piN_I32(ref, free_Ts_d)
+    ok32 = test_rhoN_I32(ref, free_Ts_d)
     return ok12 && ok32
 end
 
-test_piN()
+test_rhoN()

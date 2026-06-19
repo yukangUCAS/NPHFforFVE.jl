@@ -188,41 +188,60 @@ function build_V_hel(subspace_states_α::Vector,
     n_α_unique = unique!([n for (n, _) in subspace_states_α])
     n_β_unique = unique!([n for (n, _) in subspace_states_β])
 
-    # 对每对唯一动量构型，预计算 V_can 在所有 σ 组合下的值
+    # 探测 V_can 返回值类型: 标量 → dim_κ=1; 矩阵 → 取行/列数
+    σ_probe_α = _σ_configurations(n_α_unique[1], per_spin_α)
+    σ_probe_β = _σ_configurations(n_β_unique[1], per_spin_β)
+    sample = V_can_func(n_α_unique[1], σ_probe_α[1],
+                        n_β_unique[1], σ_probe_β[1], extra_args...)
+    dim_κA = sample isa Number ? 1 : size(sample, 1)
+    dim_κB = sample isa Number ? 1 : size(sample, 2)
+
+    # 预计算 V_can 块: (dim_σα·dim_κA) × (dim_σβ·dim_κB)
     V_can_blocks = Dict{Tuple, Matrix{ComplexF64}}()
 
     for n_α in n_α_unique, n_β in n_β_unique
-        block = Matrix{ComplexF64}(undef, dim_σα, dim_σβ)
+        block = Matrix{ComplexF64}(undef, dim_σα * dim_κA, dim_σβ * dim_κB)
         σ_vals_α = _σ_configurations(n_α, per_spin_α)
         σ_vals_β = _σ_configurations(n_β, per_spin_β)
         for (i_σα, σα) in enumerate(σ_vals_α)
+            r0 = (i_σα - 1) * dim_κA + 1
             for (i_σβ, σβ) in enumerate(σ_vals_β)
-                block[i_σα, i_σβ] = V_can_func(n_α, σα, n_β, σβ, extra_args...)
+                c0 = (i_σβ - 1) * dim_κB + 1
+                val = V_can_func(n_α, σα, n_β, σβ, extra_args...)
+                if val isa Number
+                    block[r0, c0] = val
+                else
+                    block[r0:r0+dim_κA-1, c0:c0+dim_κB-1] .= val
+                end
             end
         end
         V_can_blocks[(n_α, n_β)] = block
     end
 
-    # 构造 V_hel
-    V_hel = Matrix{ComplexF64}(undef, K_α, K_β)
+    # 构造 V_hel: (K_α·dim_κA) × (K_β·dim_κB), 行/列索引 (k-1)*dim_κ + a
+    V_hel = Matrix{ComplexF64}(undef, K_α * dim_κA, K_β * dim_κB)
     for k_α in 1:K_α
         n_α, _ = subspace_states_α[k_α]
         c_α = rot_α[k_α]
+        r0 = (k_α - 1) * dim_κA + 1
         for k_β in 1:K_β
             n_β, _ = subspace_states_β[k_β]
             c_β = rot_β[k_β]
+            c0 = (k_β - 1) * dim_κB + 1
             block = V_can_blocks[(n_α, n_β)]
-            s = ComplexF64(0.0, 0.0)
-            for i_σα in 1:dim_σα
-                ca = conj(c_α[i_σα])
-                abs2(ca) == 0.0 && continue
-                for i_σβ in 1:dim_σβ
-                    cb = c_β[i_σβ]
-                    abs2(cb) == 0.0 && continue
-                    s += ca * block[i_σα, i_σβ] * cb
+            for a in 1:dim_κA, b in 1:dim_κB
+                s = ComplexF64(0.0, 0.0)
+                for i_σα in 1:dim_σα
+                    ca = conj(c_α[i_σα])
+                    abs2(ca) == 0.0 && continue
+                    for i_σβ in 1:dim_σβ
+                        cb = c_β[i_σβ]
+                        abs2(cb) == 0.0 && continue
+                        s += ca * block[(i_σα-1)*dim_κA+a, (i_σβ-1)*dim_κB+b] * cb
+                    end
                 end
+                V_hel[r0+a-1, c0+b-1] = s
             end
-            V_hel[k_α, k_β] = s
         end
     end
     return V_hel
