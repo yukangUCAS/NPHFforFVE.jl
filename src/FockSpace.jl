@@ -441,8 +441,8 @@ end
 
 # ============ 生成 V 函数模板 ============
 
-function _generate_potential_template(sys::FockSystem)
-    path = "potential_defs.jl"
+function _generate_potential_template(sys::FockSystem, output_file::String="potential_defs.jl")
+    path = output_file
     io = open(path, "w")
 
     println(io, "# ============================================================")

@@ -413,9 +413,11 @@ end
 # ============================================================
 
 """
-    generate_potential_template(proj::Project) -> String
+    generate_potential_template(proj::Project, output_file::String="potential_defs.jl") -> String
 
-根据 Project 中的道列表和总同位旋，自动生成 V 函数模板文件 `potential_defs.jl`。
+根据 Project 中的道列表和总同位旋，自动生成 V 函数模板文件。
+
+- `output_file`: 输出文件名，默认为 `"potential_defs.jl"`
 
 包含:
 - `@params` 参数结构体骨架
@@ -426,8 +428,8 @@ end
 
 返回生成的文件路径。
 """
-function generate_potential_template(proj::Project)
-    path = "potential_defs.jl"
+function generate_potential_template(proj::Project, output_file::String="potential_defs.jl")
+    path = output_file
     io = open(path, "w")
 
     I = proj.I
@@ -659,10 +661,9 @@ function _write_channel_pair_body(io, ch_α, ch_β, subs_α, subs_β,
 end
 
 function _write_hermitian_conj_body(io, α, β)
-    println(io, "        # WARNING: Hermitian conjugate — you must implement")
-    println(io, "        #   return conj(my_V(nB, nA, s, sp, kapB, kapA, rB, rA, aB, aA, $β, $α, L_phys, params))")
-    println(io, "        # or write the explicit matrix element (remember V must be Hermitian as a matrix).")
-    println(io, "        return conj(my_V(nB, nA, s, sp, kapB, kapA, rB, rA, aB, aA, $β, $α, L_phys, params))")
+    println(io, "        # Hermitian conjugate: V(chB,chA) = conj(V(chA,chB))")
+    println(io, "        # nA↔nB, s↔sp, kapA↔kapB, rA↔rB, aA↔aB, chA↔chB already swapped here")
+    println(io, "        return conj(my_V(nB, nA, s, sp, kapB, kapA, rB, rA, aB, aA, chB, chA, L_phys, params))")
 end
 
 # ===== 通用分支（枚举所有 κ, r, a 组合，不强制 Wigner-Eckart） =====

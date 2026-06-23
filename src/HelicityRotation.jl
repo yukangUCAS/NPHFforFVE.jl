@@ -197,10 +197,12 @@ function build_V_hel(subspace_states_α::Vector,
     dim_κB = sample isa Number ? 1 : size(sample, 2)
 
     # 预计算 V_can 块: (dim_σα·dim_κA) × (dim_σβ·dim_κB)
+    # 全零块不存储，后续 V_hel 组装时跳过
     V_can_blocks = Dict{Tuple, Matrix{ComplexF64}}()
 
     for n_α in n_α_unique, n_β in n_β_unique
         block = Matrix{ComplexF64}(undef, dim_σα * dim_κA, dim_σβ * dim_κB)
+        any_nonzero = false
         σ_vals_α = _σ_configurations(n_α, per_spin_α)
         σ_vals_β = _σ_configurations(n_β, per_spin_β)
         for (i_σα, σα) in enumerate(σ_vals_α)
@@ -210,16 +212,20 @@ function build_V_hel(subspace_states_α::Vector,
                 val = V_can_func(n_α, σα, n_β, σβ, extra_args...)
                 if val isa Number
                     block[r0, c0] = val
+                    any_nonzero |= val != 0
                 else
                     block[r0:r0+dim_κA-1, c0:c0+dim_κB-1] .= val
+                    any_nonzero |= !all(iszero, val)
                 end
             end
         end
-        V_can_blocks[(n_α, n_β)] = block
+        if any_nonzero
+            V_can_blocks[(n_α, n_β)] = block
+        end
     end
 
     # 构造 V_hel: (K_α·dim_κA) × (K_β·dim_κB), 行/列索引 (k-1)*dim_κ + a
-    V_hel = Matrix{ComplexF64}(undef, K_α * dim_κA, K_β * dim_κB)
+    V_hel = zeros(ComplexF64, K_α * dim_κA, K_β * dim_κB)
     for k_α in 1:K_α
         n_α, _ = subspace_states_α[k_α]
         c_α = rot_α[k_α]
@@ -228,7 +234,8 @@ function build_V_hel(subspace_states_α::Vector,
             n_β, _ = subspace_states_β[k_β]
             c_β = rot_β[k_β]
             c0 = (k_β - 1) * dim_κB + 1
-            block = V_can_blocks[(n_α, n_β)]
+            block = get(V_can_blocks, (n_α, n_β), nothing)
+            block === nothing && continue
             for a in 1:dim_κA, b in 1:dim_κB
                 s = ComplexF64(0.0, 0.0)
                 for i_σα in 1:dim_σα
