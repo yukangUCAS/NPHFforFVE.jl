@@ -1072,15 +1072,18 @@ end
 
 """
     lowdin_orthogonalize(I::Matrix{ComplexF64}; tol::Float64=1e-12)
-        -> (Z::Vector{Float64}, C::Matrix{ComplexF64}, nonzero_indices::Vector{Int})
+        -> (Z::Vector{Float64}, C::Matrix{ComplexF64}, nonzero_indices::Vector{Int},
+            all_evals::Vector{Float64})
 
-对角化厄米矩阵 I，返回非零本征值 Z_r、对应本征矢（C 的列）和非零本征值序号。
+对角化厄米矩阵 I，返回非零本征值 Z_r、对应本征矢（C 的列）、非零本征值序号、
+以及全部本征值（供调用方诊断，避免重复特征分解）。
 
 I 矩阵理论上幂等（up to 常数），本征值应为正整数 Z_r。
 """
 function lowdin_orthogonalize(I::Matrix{ComplexF64}; tol::Float64=1e-12)
     # 厄米对角化
     evals, evecs = eigen(Hermitian(I))
+    all_evals = Float64.(evals)
 
     # 筛选非零本征值（相对容差避免数值噪声误判）
     max_ev = maximum(abs, evals)
@@ -1096,13 +1099,13 @@ function lowdin_orthogonalize(I::Matrix{ComplexF64}; tol::Float64=1e-12)
     end
 
     if isempty(nonzero_idx)
-        return Float64[], Matrix{ComplexF64}(undef, size(I,1), 0), Int[]
+        return Float64[], Matrix{ComplexF64}(undef, size(I,1), 0), Int[], all_evals
     end
 
     Z = Float64.(evals[nonzero_idx])  # 应为正整数（理论保证）
     C = evecs[:, nonzero_idx]         # 对应本征矢
 
-    return Z, C, nonzero_idx
+    return Z, C, nonzero_idx, all_evals
 end
 
 # ============ 不可约表示基展开（X 矩阵）============
@@ -2233,11 +2236,8 @@ function subspace_projection(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N
     I = build_I_matrix(n_tuple, lambda_tuple, kappa, Gamma,
                         group_els, irrep_mats, species_type, spin, etas, n_base)
 
-    # 用于检验的完整本征值
-    I_evals = eigen(Hermitian(I)).values
-
-    # 2. Löwdin 正交化
-    Z, C, _ = lowdin_orthogonalize(I)
+    # 2. Löwdin 正交化 (同时返回全部本征值，避免重复特征分解)
+    Z, C, _, I_evals = lowdin_orthogonalize(I)
 
     # 3. X 矩阵
     X = build_X_matrix(n_tuple, lambda_tuple, kappa, Gamma,
@@ -2332,8 +2332,7 @@ function subspace_projection(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N
 
     I = build_I_matrix(n_tuple, lambda_tuple, κ_tuple, Gamma,
                         group_els, irrep_mats, species, particle_types, spins, etas, n_base)
-    I_evals = eigen(Hermitian(I)).values
-    Z, C, _ = lowdin_orthogonalize(I)
+    Z, C, _, I_evals = lowdin_orthogonalize(I)
 
     X = build_X_matrix(n_tuple, lambda_tuple, κ_tuple, Gamma,
                         group_els, irrep_mats, species, particle_types, spins, etas, n_base, Z, C)
@@ -2377,8 +2376,7 @@ function _subspace_projection_zero(M::Int, n_tuple::NTuple{N,Momentum},
 
     I = build_I_matrix_zero_momentum(M, j, n_tuple, lambda_tuple, kappa, Gamma,
                                       group_els, irrep_mats, species_type, spin, etas, n_base)
-    I_evals = eigen(Hermitian(I)).values
-    Z, C, _ = lowdin_orthogonalize(I)
+    Z, C, _, I_evals = lowdin_orthogonalize(I)
 
     # 非对称化自旋基: 所有 (2j+1)^M 个自旋组态，与 build_V_hel 一致
     X = build_X_matrix_zero_momentum(M, j, n_tuple, lambda_tuple, kappa, Gamma,
@@ -2435,8 +2433,7 @@ function _subspace_projection_zero(n_tuple::NTuple{N,Momentum},
     I = build_I_matrix_zero_momentum(zero_counts, sorted_n, sorted_lam, κ_tuple, Gamma,
                                       group_els, irrep_mats, species, particle_types,
                                       spins, etas, n_base)
-    I_evals = eigen(Hermitian(I)).values
-    Z, C, _ = lowdin_orthogonalize(I)
+    Z, C, _, I_evals = lowdin_orthogonalize(I)
 
     X = build_X_matrix_zero_momentum(zero_counts, sorted_n, sorted_lam, κ_tuple, Gamma,
                                       group_els, irrep_mats, species, particle_types,
@@ -2552,5 +2549,26 @@ function project_V(X_left::AbstractMatrix, X_right::AbstractMatrix,
     V_hel = build_V_hel(subspace_states_left, subspace_states_right,
                         per_spin_left, per_spin_right,
                         V_can_func, extra_args...)
+    return fv_factor * (X_left' * V_hel * X_right)
+end
+
+"""
+    project_V_hel(X_left, X_right, subspace_states_left, subspace_states_right,
+                  L, V_hel_adapter, extra_args...) -> Matrix{ComplexF64}
+
+螺旋度表象版 project_V。无需 per_spin，直接调用 build_V_hel_direct 填 V_hel。
+"""
+function project_V_hel(X_left::AbstractMatrix, X_right::AbstractMatrix,
+                       subspace_states_left::Vector,
+                       subspace_states_right::Vector,
+                       L::Real,
+                       V_hel_adapter::Function, extra_args...)
+    N_α = length(first(subspace_states_left)[1])
+    N_β = length(first(subspace_states_right)[1])
+    d = 3 * (N_α + N_β) - 6
+    fv_factor = (2π * ħc / L)^(d / 2)
+
+    V_hel = build_V_hel_direct(subspace_states_left, subspace_states_right,
+                               V_hel_adapter, extra_args...)
     return fv_factor * (X_left' * V_hel * X_right)
 end

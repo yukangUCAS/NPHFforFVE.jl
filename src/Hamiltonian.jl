@@ -100,8 +100,9 @@ function SystemBasis(sys::FockSystem)
 
         for (si, sub) in enumerate(subs)
             # 1) 收集所有不可约表示的所有态 (并集)
-            all_states = []
-            state_to_idx = Dict()
+            ST = Tuple{NTuple{ch.N, Momentum}, NTuple{ch.N, Float64}}
+            all_states = Vector{ST}()
+            state_to_idx = Dict{ST, Int}()
             for Gamma in sys.selected_irreps
                 projs = if multi
                     _get_channel_proj_list(ch, ncut, sys.d, sub.κ, Gamma, Float64.(ch.spins), etas_v)
@@ -162,39 +163,72 @@ end
 
 仅需在 V_func 或 params 变化时重新调用。basis（几何缓存）不变时保留复用。
 """
-function build_V_hel_blocks!(basis::SystemBasis, V_func::Function, params)
+function build_V_hel_blocks!(basis::SystemBasis, V_func::Function, params;
+                             V_basis::Symbol=:canonical,
+                             V_filter=nothing)
     empty!(basis.V_hel_blocks)
     n_ch = length(basis.sys.channels)
 
+    # 收集所有 (子道对) 工作项
+    tasks = Tuple{Int,Int,SubBasisData,Int,Int,SubBasisData}[]
     for α in 1:n_ch
         ch_α = basis.sys.channels[α]
         sub_data_α = basis.chan_sub_data[α]
-
         for (sα, sd_α) in enumerate(sub_data_α)
-            K_α = length(sd_α.states)
-            K_α == 0 && continue
-
+            length(sd_α.states) == 0 && continue
             for β in 1:n_ch
                 ch_β = basis.sys.channels[β]
                 sub_data_β = basis.chan_sub_data[β]
-
                 for (sβ, sd_β) in enumerate(sub_data_β)
-                    K_β = length(sd_β.states)
-                    K_β == 0 && continue
-
-                    V_adapted = _V_adapter(V_func, sd_α.kappa, sd_β.kappa,
-                                               sd_α.r_val, sd_β.r_val,
-                                               sd_α.a_val, sd_β.a_val,
-                                               sd_α.dim_kappa, sd_β.dim_kappa,
-                                               α, β, basis.L_phys, params)
-
-                    V_hel = build_V_hel(sd_α.states, sd_β.states,
-                                        sd_α.per_spin, sd_β.per_spin,
-                                        V_adapted)
-                    basis.V_hel_blocks[(α, sα, β, sβ)] = V_hel
+                    length(sd_β.states) == 0 && continue
+                    push!(tasks, (α, sα, sd_α, β, sβ, sd_β))
                 end
             end
         end
+    end
+
+    # 串行调度各道对，并行在 build_V_hel / build_V_hel_direct 内部
+    n_tasks = length(tasks)
+    results = Vector{Matrix{ComplexF64}}(undef, n_tasks)
+    keys    = Vector{Tuple{Int,Int,Int,Int}}(undef, n_tasks)
+
+    for i in 1:n_tasks
+        α, sα, sd_α, β, sβ, sd_β = tasks[i]
+        V_adapted = _V_adapter(V_func, sd_α.kappa, sd_β.kappa,
+                                   sd_α.r_val, sd_β.r_val,
+                                   sd_α.a_val, sd_β.a_val,
+                                   sd_α.dim_kappa, sd_β.dim_kappa,
+                                   α, β, basis.L_phys, params)
+        filter_adapted = if V_filter !== nothing
+            (n_α, lam_or_sig_α, n_β, lam_or_sig_β, extra...) ->
+                V_filter(n_α, n_β, lam_or_sig_α, lam_or_sig_β,
+                         sd_α.kappa, sd_β.kappa,
+                         sd_α.r_val, sd_β.r_val,
+                         sd_α.a_val, sd_β.a_val,
+                         α, β, basis.L_phys, params)
+        else
+            nothing
+        end
+        # channel 级哨兵: nA=nothing 仅检查道对是否可跳过
+        if filter_adapted !== nothing && !filter_adapted(nothing, nothing, nothing, nothing)
+            results[i] = Matrix{ComplexF64}(undef, 0, 0)
+            keys[i] = (α, sα, β, sβ)
+            continue
+        end
+        results[i] = if V_basis == :helicity
+            build_V_hel_direct(sd_α.states, sd_β.states, V_adapted;
+                               V_filter=filter_adapted)
+        else
+            build_V_hel(sd_α.states, sd_β.states,
+                        sd_α.per_spin, sd_β.per_spin, V_adapted;
+                        V_filter=filter_adapted)
+        end
+        keys[i] = (α, sα, β, sβ)
+    end
+
+    # 串行填入字典（避免并发写 Dict）
+    for i in 1:n_tasks
+        basis.V_hel_blocks[keys[i]] = results[i]
     end
 
     return basis
@@ -286,6 +320,158 @@ function _assemble_irrep_hamiltonian(basis::SystemBasis, Gamma::String)
     end
 
     return H
+end
+
+# ============ 稀疏线性算子 + eigs ============
+
+"""
+    _VBlock — 单个投影 V 块的存储
+
+mat 为 fv * X_α' * V_sub * X_β，维度 n_r_α × n_r_β。
+"""
+struct _VBlock
+    r_rng::UnitRange{Int}
+    c_rng::UnitRange{Int}
+    mat::Matrix{ComplexF64}
+end
+
+"""
+    _build_hamiltonian_operator(basis, Gamma) -> (T_diag, v_blocks)
+
+从 SystemBasis 构建哈密顿量线性算子表示。
+返回动能对角向量 T_diag 和 V_proj 块列表，替代稠密 H 矩阵 (dim×dim)。
+遍历逻辑与 _assemble_irrep_hamiltonian 完全一致，仅输出形式不同。
+"""
+function _build_hamiltonian_operator(basis::SystemBasis, Gamma::String)
+    dim = basis.irrep_total_dim[Gamma]
+    dim == 0 && return Float64[], _VBlock[]
+
+    T_diag = zeros(Float64, dim)
+    v_blocks = _VBlock[]
+    n_ch = length(basis.sys.channels)
+    L_phys = basis.L_phys
+
+    row_start = 1
+    for α in 1:n_ch
+        sub_data_α = basis.chan_sub_data[α]
+        for (sα, sd_α) in enumerate(sub_data_α)
+            blocks_α = sd_α.proj_by_irrep[Gamma]
+            n_r_α = sum(b.n_r for b in blocks_α; init=0)
+            n_r_α == 0 && continue
+
+            col_start = 1
+            for β in 1:n_ch
+                sub_data_β = basis.chan_sub_data[β]
+                for (sβ, sd_β) in enumerate(sub_data_β)
+                    blocks_β = sd_β.proj_by_irrep[Gamma]
+                    n_r_β = sum(b.n_r for b in blocks_β; init=0)
+                    n_r_β == 0 && continue
+
+                    V_hel = get(basis.V_hel_blocks, (α, sα, β, sβ), nothing)
+
+                    if V_hel !== nothing && size(V_hel, 1) > 0 && size(V_hel, 2) > 0
+                        N_α_val = length(first(sd_α.states)[1])
+                        N_β_val = length(first(sd_β.states)[1])
+                        d_val = 3 * (N_α_val + N_β_val) - 6
+                        fv = (2π * ħc / L_phys)^(d_val / 2)
+
+                        row_off = 1
+                        for blk_α in blocks_α
+                            col_off = 1
+                            for blk_β in blocks_β
+                                V_sub = V_hel[blk_α.row_indices, blk_β.row_indices]
+                                V_proj = fv * blk_α.X' * V_sub * blk_β.X
+                                if !all(iszero, V_proj)
+                                    r_rng = row_start+row_off-1 : row_start+row_off+blk_α.n_r-2
+                                    c_rng = col_start+col_off-1 : col_start+col_off+blk_β.n_r-2
+                                    push!(v_blocks, _VBlock(r_rng, c_rng, V_proj))
+                                end
+                                col_off += blk_β.n_r
+                            end
+                            row_off += blk_α.n_r
+                        end
+                    end
+
+                    if α == β && sα == sβ
+                        T_off = 1
+                        for blk_α in blocks_α
+                            n_tuple = sd_α.states[blk_α.row_indices[1]][1]
+                            T_rep = _kinetic_energy_rep(n_tuple, sd_α.per_mass,
+                                                        L_phys, sd_α.kinetic_type; d=basis.sys.d)
+                            r_rng = row_start+T_off-1 : row_start+T_off+blk_α.n_r-2
+                            T_diag[r_rng] .+= T_rep
+                            T_off += blk_α.n_r
+                        end
+                    end
+
+                    col_start += n_r_β
+                end
+            end
+            row_start += n_r_α
+        end
+    end
+
+    return T_diag, v_blocks
+end
+
+"""
+    _H_matvec(x, T_diag, v_blocks) -> y
+
+线性算子 y = H * x，无需存储稠密 H 矩阵。
+遍历所有 V 块: y[r_rng] += V_proj * x[c_rng]，加上动能对角贡献。
+"""
+function _H_matvec(x::AbstractVector{<:ComplexF64}, T_diag::Vector{Float64},
+                   v_blocks::Vector{_VBlock})
+    y = T_diag .* x
+    for vb in v_blocks
+        y[vb.r_rng] .+= vb.mat * x[vb.c_rng]
+    end
+    return y
+end
+
+"""
+    compute_spectrum_eigs(basis::SystemBasis; n_levels=20, tol=1e-8)
+        -> Dict{String, Vector{Float64}}
+
+使用稀疏线性算子 + KrylovKit.eigsolve 计算各不可约表示的最低 n_levels 个本征值。
+
+不构造稠密 dim×dim 哈密顿量矩阵，适用于大维度系统（>5000）。
+"""
+function compute_spectrum_eigs(basis::SystemBasis;
+                                n_levels::Union{Int, Dict{String, Int}} = 20,
+                                tol::Float64 = 1e-8)
+    result = Dict{String, Vector{Float64}}()
+    for Gamma in basis.sys.selected_irreps
+        dim = basis.irrep_total_dim[Gamma]
+        dim == 0 && continue
+
+        n_g = n_levels isa Int ? n_levels : get(n_levels, Gamma, 20)
+        T_diag, v_blocks = _build_hamiltonian_operator(basis, Gamma)
+
+        if isempty(v_blocks)
+            result[Gamma] = sort(T_diag)[1:min(n_g, dim)]
+            continue
+        end
+
+        n_ev = min(n_g, dim)
+        H_op = x -> _H_matvec(x, T_diag, v_blocks)
+
+        evals, _, info = eigsolve(
+            H_op, randn(ComplexF64, dim), n_ev, :SR,
+            Arnoldi(; tol=tol, maxiter=max(200, dim ÷ 5))
+        )
+        info.converged < n_ev &&
+            @warn "KrylovKit 仅收敛 $(info.converged)/$n_ev 个本征值 (Γ=$Gamma)"
+
+        ev = sort(real.(evals))[1:min(length(evals), n_ev)]
+
+        if basis.sys.d != D000
+            P_mag = (2π * ħc / basis.L_phys) * sqrt(Float64(sum(abs2, basis.sys.d)))
+            ev = [sqrt(E^2 + P_mag^2) for E in ev]
+        end
+        result[Gamma] = ev
+    end
+    return result
 end
 
 """
@@ -636,7 +822,8 @@ end
 
 function _build_subchannel_block(projs_α::Vector, projs_β::Vector,
                                  per_spin_α, per_spin_β,
-                                 L_phys::Float64, V_adapter::Function)
+                                 L_phys::Float64, V_adapter::Function;
+                                 V_basis::Symbol=:canonical)
     n_r_α = sum(p.n_r for p in projs_α; init=0)
     n_r_β = sum(p.n_r for p in projs_β; init=0)
     (n_r_α == 0 || n_r_β == 0) && return zeros(ComplexF64, n_r_α, n_r_β)
@@ -646,8 +833,13 @@ function _build_subchannel_block(projs_α::Vector, projs_β::Vector,
     for p_α in projs_α
         col_start = 1
         for p_β in projs_β
-            sub = project_V(p_α.X, p_β.X, p_α.states, p_β.states,
-                           per_spin_α, per_spin_β, L_phys, V_adapter)
+            sub = if V_basis == :helicity
+                project_V_hel(p_α.X, p_β.X, p_α.states, p_β.states,
+                             L_phys, V_adapter)
+            else
+                project_V(p_α.X, p_β.X, p_α.states, p_β.states,
+                         per_spin_α, per_spin_β, L_phys, V_adapter)
+            end
             block[row_start:row_start+p_α.n_r-1,
                   col_start:col_start+p_β.n_r-1] .= sub
             col_start += p_β.n_r
@@ -669,7 +861,8 @@ end
     V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, params)
 """
 function build_hamiltonian_block(sys::FockSystem, Gamma::String,
-                                 V_func::Function, params)
+                                 V_func::Function, params;
+                                 V_basis::Symbol=:canonical)
     Gamma in sys.selected_irreps ||
         throw(ArgumentError("Γ=$Gamma 不在 sys.selected_irreps ($(sys.selected_irreps)) 中"))
 
@@ -746,7 +939,8 @@ function build_hamiltonian_block(sys::FockSystem, Gamma::String,
                                            s_α.r, s_β.r, s_α.a, s_β.a,
                                            s_α.dim, s_β.dim, α, β, L_phys, params)
                     sub_block = _build_subchannel_block(
-                        projs_α, projs_β, pspin_α, pspin_β, L_phys, V_adapted)
+                        projs_α, projs_β, pspin_α, pspin_β, L_phys, V_adapted;
+                        V_basis=V_basis)
 
                     # 动能对角矩阵 (仅道对角 + 子道对角)
                     if α == β && s_α.κ == s_β.κ && s_α.r == s_β.r
@@ -784,10 +978,19 @@ evals["T1-"]  # T1- 能级列表
 ```
 """
 function compute_spectrum(sys::FockSystem, V_func::Function, params;
-                          n_levels::Union{Nothing, Dict{String, Int}} = nothing)
+                          n_levels::Union{Nothing, Dict{String, Int}} = nothing,
+                          V_basis::Symbol=:canonical,
+                          eigs::Bool=false,
+                          V_filter=nothing)
     basis = SystemBasis(sys)
-    build_V_hel_blocks!(basis, V_func, params)
-    return compute_spectrum(basis; n_levels=n_levels)
+    build_V_hel_blocks!(basis, V_func, params; V_basis=V_basis,
+                        V_filter=V_filter)
+    if eigs
+        n_use = something(n_levels, 20)
+        return compute_spectrum_eigs(basis; n_levels=n_use)
+    else
+        return compute_spectrum(basis; n_levels=n_levels)
+    end
 end
 
 """

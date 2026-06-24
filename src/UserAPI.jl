@@ -49,6 +49,7 @@ mutable struct Project
     channels::Vector{FockChannel}
     Ncuts::Vector{Int}
     configs::Vector{Config}
+    V_basis::Symbol
 end
 
 """
@@ -69,7 +70,10 @@ ch_pipi = FockChannel("pipi", [2], [:boson], [140.0], [0//1], [1//1], [-1.0], re
 proj = Project(Momentum(0,0,0), 1//1, [ch_rho, ch_pipi], [0, 8])
 ```
 """
-function Project(d, I::Rational{Int}, channels::Vector{FockChannel}, Ncuts::Vector{Int})
+function Project(d, I::Rational{Int}, channels::Vector{FockChannel}, Ncuts::Vector{Int};
+                  V_basis::Symbol=:canonical)
+    V_basis in (:canonical, :helicity) ||
+        throw(ArgumentError("V_basis must be :canonical or :helicity, got :$V_basis"))
     n_ch = length(channels)
     length(Ncuts) == n_ch ||
         throw(ArgumentError("Ncuts 长度 ($(length(Ncuts))) 必须与 channels 长度 ($n_ch) 一致"))
@@ -82,7 +86,7 @@ function Project(d, I::Rational{Int}, channels::Vector{FockChannel}, Ncuts::Vect
     end
 
     d_mom = d isa Momentum ? d : Momentum(d...)
-    return Project(d_mom, I, channels, Ncuts, Config[])
+    return Project(d_mom, I, channels, Ncuts, Config[], V_basis)
 end
 
 """
@@ -155,7 +159,7 @@ function Base.getindex(r::ProjectResult, idx::Int)
 end
 
 """
-    compute!(proj::Project, V_func, params) -> ProjectResult
+    compute!(proj::Project, V_func, params; eigs=false, V_filter=nothing) -> ProjectResult
 
 计算所有组态的能谱。相同 (L,a) 的组态自动共享几何缓存和 V_hel，
 无需用户手动处理。
@@ -164,6 +168,11 @@ end
 - `proj`: 已完成阶段 A+B 的 Project
 - `V_func`: 相互作用函数，签名同 `build_hamiltonian_block` 要求
 - `params`: V_func 的参数（@params struct 实例）
+- `eigs`: 若为 true，使用稀疏线性算子 + KrylovKit.eigsolve，
+  不构造稠密 H 矩阵，适用于大维度系统 (>5000)
+- `V_filter`: 可选稀疏过滤器，签名同 V_func，返回 Bool。
+  `false` 跳过该矩阵元计算（跳过昂贵的 V_func 调用），
+  适用于已知大量零矩阵元的稀疏相互作用
 
 # 返回
 `ProjectResult`，通过 `result[idx]` 获取第 idx 个组态的 `Dict{String, Vector{Float64}}`。
@@ -175,7 +184,8 @@ result[1]          # Dict("T1-" => [...], "A2-" => [...])
 result[1]["T1-"]   # T1- 能级向量
 ```
 """
-function compute!(proj::Project, V_func, params)
+function compute!(proj::Project, V_func, params; eigs::Bool=false,
+                  V_filter=nothing)
     isempty(proj.configs) &&
         throw(ArgumentError("请先用 add_config! 添加至少一个组态"))
 
@@ -207,13 +217,19 @@ function compute!(proj::Project, V_func, params)
         sys = FockSystem(proj.d, 1, proj.channels, L, a, proj.I, all_irreps;
                          Ncut_channel=ncuts_sys)
         basis = SystemBasis(sys)
-        build_V_hel_blocks!(basis, V_func, params)
+        build_V_hel_blocks!(basis, V_func, params;
+                            V_basis=proj.V_basis,
+                            V_filter=V_filter)
 
         for idx in config_indices
             cfg = proj.configs[idx]
             n_levels = Dict(cfg.irreps[i] => cfg.n_levels[i]
                             for i in 1:length(cfg.irreps))
-            spectra[idx] = compute_spectrum(basis; n_levels=n_levels)
+            if eigs
+                spectra[idx] = compute_spectrum_eigs(basis; n_levels=n_levels)
+            else
+                spectra[idx] = compute_spectrum(basis; n_levels=n_levels)
+            end
         end
     end
 
@@ -429,6 +445,7 @@ end
 返回生成的文件路径。
 """
 function generate_potential_template(proj::Project, output_file::String="potential_defs.jl")
+    V_basis = proj.V_basis
     path = output_file
     io = open(path, "w")
 
@@ -449,10 +466,23 @@ function generate_potential_template(proj::Project, output_file::String="potenti
     println(io, "#       names = param_names(MyParams)         # -> [\"C0\", \"C1\", ...]")
     println(io, "#       p_best = from_vector(MyParams, x_fit) # after JuMinuit")
     println(io, "#")
-    println(io, "#   2. Fill in the my_V function below.")
-    println(io, "#      Dispatch on (chA, chB) to select the channel pair,")
-    println(io, "#      then use (kapA, kapB, rA, rB) for isospin sub-channel.")
-    println(io, "#      (aA, aB are vestigial, always 1 — kept for signature compatibility.)")
+    if V_basis == :canonical
+        println(io, "#   2. Fill in the my_V function below.")
+        println(io, "#      Dispatch on (chA, chB) to select the channel pair,")
+        println(io, "#      then use (kapA, kapB, rA, rB) for isospin sub-channel.")
+        println(io, "#      (aA, aB are vestigial, always 1 — kept for signature compatibility.)")
+    else
+        println(io, "#   2. Fill in the my_V_hel function below (helicity basis).")
+        println(io, "#      Dispatch on (chA, chB) to select the channel pair,")
+        println(io, "#      then use (kapA, kapB, rA, rB) for isospin sub-channel.")
+        println(io, "#      (aA, aB are vestigial, always 1 — kept for signature compatibility.)")
+        println(io, "#")
+        println(io, "#      ZERO-MOMENTUM BRANCHING:")
+        println(io, "#      Spinful particles at rest (|p|=0) have no helicity direction.")
+        println(io, "#      zmA[i]/zmB[i] flags identify these; when true, lamA[i]/lamB[i]")
+        println(io, "#      degenerates to the canonical spin projection σ_i ∈ {j, j-1, ..., -j}.")
+        println(io, "#      Use lamA[i] / lamB[i] directly as σ_i in the ZM branch.")
+    end
     println(io, "#")
     println(io, "#   3. Define param_bounds / param_errors overrides at the bottom.")
     println(io, "#")
@@ -475,6 +505,23 @@ function generate_potential_template(proj::Project, output_file::String="potenti
     println(io, "using NPHFforFVE")
     println(io)
 
+    # ===== _PER_SPIN (helicity basis only) =====
+    if V_basis == :helicity
+        println(io, "# ============ Per-particle spins (for ZM detection) ============")
+        println(io, "# _PER_SPIN[ch] = spin of each particle in channel ch")
+        println(io, "# Used to detect spinful particles at zero momentum (zmA, zmB).")
+        println(io, "const _PER_SPIN = [")
+        for (i, ch) in enumerate(proj.channels)
+            per_spin = Float64[]
+            for (s, j) in zip(ch.species, ch.spins)
+                append!(per_spin, fill(Float64(j), s))
+            end
+            println(io, "    $(per_spin),  # ch $i: \"$(ch.name)\"")
+        end
+        println(io, "]")
+        println(io)
+    end
+
     # ===== @params =====
     println(io, "# ============ Parameter struct ============")
     println(io, "# Add your LECs, cutoffs etc. below.")
@@ -490,21 +537,40 @@ function generate_potential_template(proj::Project, output_file::String="potenti
     println(io, "# ============ V matrix elements ============")
     println(io, "#")
     println(io, "# Signature:")
-    println(io, "#   my_V(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, params)")
-    println(io, "#")
-    println(io, "#   nA, nB : bra / ket momentum tuple  NTuple{N, Momentum}")
-    println(io, "#   sp, s  : bra / ket spin projections  NTuple{N, Rational{Int}}")
-    println(io, "#   kapA, kapB : S_N irrep label (String, or Tuple for multi-species)")
-    println(io, "#   rA, rB : multiplicity index")
-    println(io, "#   aA, aB : vestigial (always 1, kept for API compatibility)")
-    println(io, "#   chA, chB : channel index (see table below)")
-    println(io, "#   params : MyParams instance")
-    println(io, "#")
-    println(io, "#   Return a dimA × dimB matrix (scalar if dimA=dimB=1) with")
-    println(io, "#   the V matrix elements between the given isospin sub-channels.")
-    println(io, "#")
-    println(io, "# IMPORTANT: V must be Hermitian: my_V(nA, nB, ..., chA, chB, L_phys, params)")
-    println(io, "#            = conj(my_V(nB, nA, ..., chB, chA, L_phys, params))")
+    if V_basis == :canonical
+        println(io, "#   my_V(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, params)")
+        println(io, "#")
+        println(io, "#   nA, nB : bra / ket momentum tuple  NTuple{N, Momentum}")
+        println(io, "#   sp, s  : bra / ket spin projections  NTuple{N, Rational{Int}}")
+        println(io, "#   kapA, kapB : S_N irrep label (String, or Tuple for multi-species)")
+        println(io, "#   rA, rB : multiplicity index")
+        println(io, "#   aA, aB : vestigial (always 1, kept for API compatibility)")
+        println(io, "#   chA, chB : channel index (see table below)")
+        println(io, "#   params : MyParams instance")
+        println(io, "#")
+        println(io, "#   Return a dimA × dimB matrix (scalar if dimA=dimB=1) with")
+        println(io, "#   the V matrix elements between the given isospin sub-channels.")
+        println(io, "#")
+        println(io, "# IMPORTANT: V must be Hermitian: my_V(nA, nB, ..., chA, chB, L_phys, params)")
+        println(io, "#            = conj(my_V(nB, nA, ..., chB, chA, L_phys, params))")
+    else
+        println(io, "#   my_V_hel(nA, nB, lamA, lamB, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, params)")
+        println(io, "#")
+        println(io, "#   nA, nB : bra / ket momentum tuple  NTuple{N, Momentum}")
+        println(io, "#   lamA, lamB : bra / ket helicity  NTuple{N, Float64}")
+        println(io, "#        (degenerates to canonical spin projection σ for ZM+spin particles)")
+        println(io, "#   kapA, kapB : S_N irrep label (String, or Tuple for multi-species)")
+        println(io, "#   rA, rB : multiplicity index")
+        println(io, "#   aA, aB : vestigial (always 1, kept for API compatibility)")
+        println(io, "#   chA, chB : channel index (see table below)")
+        println(io, "#   params : MyParams instance")
+        println(io, "#")
+        println(io, "#   Return a dimA × dimB matrix (scalar if dimA=dimB=1) with")
+        println(io, "#   the V matrix elements between the given isospin sub-channels.")
+        println(io, "#")
+        println(io, "# IMPORTANT: V must be Hermitian: my_V_hel(nA, nB, ..., chA, chB, L_phys, params)")
+        println(io, "#            = conj(my_V_hel(nB, nA, ..., chB, chA, L_phys, params))")
+    end
     println(io)
 
     # 道索引表
@@ -515,10 +581,22 @@ function generate_potential_template(proj::Project, output_file::String="potenti
     is_moving = proj.d != D000
 
     # 生成按 (chA, chB) 分发的统一函数
-    println(io, "function my_V(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, params)")
+    fname = V_basis == :helicity ? "my_V_hel" : "my_V"
+    spin_args = V_basis == :helicity ? "lamA, lamB" : "sp, s"
+    println(io, "function $fname(nA, nB, $spin_args, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, params)")
     println(io, "    # ===== Convert integer n → physical momentum p (MeV) =====")
     println(io, "    # ħc = 197.327 MeV·fm")
     println(io, "    pv = 2π * 197.327 / L_phys")
+
+    # ZM detection for helicity basis
+    if V_basis == :helicity
+        println(io)
+        println(io, "    # ── Zero-momentum detection ──")
+        println(io, "    # Spinful particles at rest: helicity λ degenerates to canonical spin σ.")
+        println(io, "    # zmA[i]/zmB[i] = true  ⇒  lamA[i]/lamB[i] ∈ {j, j-1, ..., -j}")
+        println(io, "    zmA = [iszero(nA[i]) && _PER_SPIN[chA][i] != 0.0 for i in 1:length(nA)]")
+        println(io, "    zmB = [iszero(nB[i]) && _PER_SPIN[chB][i] != 0.0 for i in 1:length(nB)]")
+    end
 
     if is_moving
         # 运动系：每道展开的每粒子质量 + boost
@@ -573,7 +651,8 @@ function generate_potential_template(proj::Project, output_file::String="potenti
             println(io, "    $keyword chA == $α && chB == $β")
             _write_channel_pair_body(io, ch_α, ch_β, subs_α, subs_β,
                                      multi_α, multi_β, α, β, arrow;
-                                     ret_prefix=ret_wrap[1], ret_suffix=ret_wrap[2])
+                                     ret_prefix=ret_wrap[1], ret_suffix=ret_wrap[2],
+                                     V_basis=V_basis)
         else
             # α<β: 写 chA←chB，chB←chA 标为 Hermitian conjugate
             other = (β, α)
@@ -583,13 +662,14 @@ function generate_potential_template(proj::Project, output_file::String="potenti
             println(io, "    $keyword chA == $α && chB == $β")
             _write_channel_pair_body(io, ch_α, ch_β, subs_α, subs_β,
                                      multi_α, multi_β, α, β, arrow;
-                                     ret_prefix=ret_wrap[1], ret_suffix=ret_wrap[2])
+                                     ret_prefix=ret_wrap[1], ret_suffix=ret_wrap[2],
+                                     V_basis=V_basis)
 
             println(io)
             keyword = "elseif"
             println(io, "    # ── $(ch_β.name) ← $(ch_α.name)  (Hermitian conjugate of $α←$β) ──")
             println(io, "    $keyword chA == $β && chB == $α")
-            _write_hermitian_conj_body(io, α, β)  # Hermitian: 不包装 (递归调用已有因子)
+            _write_hermitian_conj_body(io, α, β; V_basis=V_basis)
         end
 
         first_block = false
@@ -597,6 +677,31 @@ function generate_potential_template(proj::Project, output_file::String="potenti
 
     println(io, "    end")
     println(io, "    error(\"unreachable: no matching channel pair for chA=\$chA chB=\$chB\")")
+    println(io, "end")
+    println(io)
+
+    # ===== Sparse V filter (optional) =====
+    filter_name = V_basis == :helicity ? "my_V_hel_filter" : "my_V_filter"
+    println(io, "# ============ Sparse V filter (optional) ============")
+    println(io, "# Two-level filter, called with one function:")
+    println(io, "#")
+    println(io, "#   Level 1 — channel-pair skip (nA === nothing):")
+    println(io, "#     Return `false` to skip the entire (chA, chB) subchannel pair.")
+    println(io, "#     Only check chA, chB here; momentum/spin are NOT available.")
+    println(io, "#     e.g.  chA == 3 && chB == 3 && return false")
+    println(io, "#")
+    println(io, "#   Level 2 — matrix-element skip (nA != nothing):")
+    println(io, "#     Return `false` to skip a single V matrix element.")
+    println(io, "#     Full momentum/spin args available.")
+    println(io, "#     e.g.  nA[2] != nB[2] && return false   # spectator matching")
+    println(io, "function $filter_name(nA, nB, $spin_args, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, params)")
+    println(io, "    # ── Level 1: channel-pair skip ──")
+    println(io, "    if nA === nothing")
+    println(io, "        # chA == 3 && chB == 3 && return false")
+    println(io, "        return true")
+    println(io, "    end")
+    println(io, "    # ── Level 2: matrix-element skip ──")
+    println(io, "    return true")
     println(io, "end")
     println(io)
 
@@ -646,7 +751,8 @@ end
 
 function _write_channel_pair_body(io, ch_α, ch_β, subs_α, subs_β,
                                   multi_α, multi_β, α, β, arrow;
-                                  ret_prefix="", ret_suffix="")
+                                  ret_prefix="", ret_suffix="",
+                                  V_basis::Symbol=:canonical)
     # 空子道保护: 该道在给定 I 下无同位旋子道
     if isempty(subs_α) || isempty(subs_β)
         name = α == β ? ch_α.name : "$(ch_α.name)←$(ch_β.name)"
@@ -655,31 +761,54 @@ function _write_channel_pair_body(io, ch_α, ch_β, subs_α, subs_β,
         return
     end
 
-    # 显式枚举所有 (κ, r, a) 分支 — 不强制 Wigner-Eckart
-    _write_full_branches_body(io, subs_α, subs_β, ch_α.name, ch_β.name;
-                              ret_prefix=ret_prefix, ret_suffix=ret_suffix)
+    if V_basis == :helicity
+        # ZM if-else wrapper for helicity basis
+        println(io, "        if any(zmA) || any(zmB)")
+        println(io, "            # ═══ ZM BRANCH ═══")
+        println(io, "            # Spinful ZM particles: lamA[i]/lamB[i] = canonical σ_i")
+        println(io, "            # Use lamA[i], lamB[i] directly as spin projection values.")
+        _write_full_branches_body(io, subs_α, subs_β, ch_α.name, ch_β.name;
+                                  ret_prefix=ret_prefix, ret_suffix=ret_suffix,
+                                  indent="            ", zm_mode="ZM")
+        println(io, "        else")
+        println(io, "            # ═══ HELICITY BRANCH ═══")
+        println(io, "            # All momenta non-zero: standard helicity formula.")
+        _write_full_branches_body(io, subs_α, subs_β, ch_α.name, ch_β.name;
+                                  ret_prefix=ret_prefix, ret_suffix=ret_suffix,
+                                  indent="            ", zm_mode="helicity")
+        println(io, "        end")
+    else
+        _write_full_branches_body(io, subs_α, subs_β, ch_α.name, ch_β.name;
+                                  ret_prefix=ret_prefix, ret_suffix=ret_suffix)
+    end
 end
 
-function _write_hermitian_conj_body(io, α, β)
+function _write_hermitian_conj_body(io, α, β; V_basis::Symbol=:canonical)
+    fname = V_basis == :helicity ? "my_V_hel" : "my_V"
+    # For Hermitian conjugate: bra↔ket, so old lamB (ket) → new lamA (bra), old lamA (bra) → new lamB (ket)
+    spin_args = V_basis == :helicity ? "lamB, lamA" : "s, sp"
     println(io, "        # Hermitian conjugate: V(chB,chA) = conj(V(chA,chB))")
-    println(io, "        # nA↔nB, s↔sp, kapA↔kapB, rA↔rB, aA↔aB, chA↔chB already swapped here")
-    println(io, "        return conj(my_V(nB, nA, s, sp, kapB, kapA, rB, rA, aB, aA, chB, chA, L_phys, params))")
+    println(io, "        return conj($fname(nB, nA, $spin_args, kapB, kapA, rB, rA, aB, aA, chB, chA, L_phys, params))")
 end
 
 # ===== 通用分支（枚举所有 κ, r, a 组合，不强制 Wigner-Eckart） =====
 
 function _write_full_branches_body(io, subs_α, subs_β, name_α, name_β;
-                                   ret_prefix="", ret_suffix="")
+                                   ret_prefix="", ret_suffix="",
+                                   indent="        ",
+                                   zm_mode::Union{Nothing, String}=nothing)
     need_κ = _need_branch_value(subs_α, :κ) || _need_branch_value(subs_β, :κ)
     need_r = _need_branch_value(subs_α, :r) || _need_branch_value(subs_β, :r)
     need_a = _need_branch_value(subs_α, :a) || _need_branch_value(subs_β, :a)
     any_branch = need_κ || need_r || need_a
+    indent2 = indent * "    "  # 4 more spaces for body
 
     if !any_branch
         s_α = subs_α[1]
         s_β = subs_β[1]
-        println(io, "        # <$(s_α.κ), r=$(s_α.r), a=$(s_α.a) | V | $(s_β.κ), r=$(s_β.r), a=$(s_β.a)>")
-        println(io, "        error(\"TODO: fill matrix element for κA=$(_escape_str(s_α.κ)), κB=$(_escape_str(s_β.κ)), rA=$(s_α.r), rB=$(s_β.r), aA=$(s_α.a), aB=$(s_β.a)\")")
+        tag = zm_mode === nothing ? "" : " ($zm_mode)"
+        println(io, "$indent# <$(s_α.κ), r=$(s_α.r), a=$(s_α.a) | V | $(s_β.κ), r=$(s_β.r), a=$(s_β.a)>$tag")
+        println(io, "$(indent)error(\"TODO: fill matrix element for κA=$(_escape_str(s_α.κ)), κB=$(_escape_str(s_β.κ)), rA=$(s_α.r), rB=$(s_β.r), aA=$(s_α.a), aB=$(s_β.a)\")")
         return
     end
 
@@ -690,13 +819,14 @@ function _write_full_branches_body(io, subs_α, subs_β, name_α, name_β;
         need_r && push!(conds, "rA == $(s_α.r) && rB == $(s_β.r)")
         need_a && push!(conds, "aA == $(s_α.a) && aB == $(s_β.a)")
         keyword = first ? "if" : "elseif"
-        println(io, "        $keyword $(join(conds, " && "))")
-        println(io, "            # <$(s_α.κ), r=$(s_α.r), a=$(s_α.a) | V | $(s_β.κ), r=$(s_β.r), a=$(s_β.a)>")
-        println(io, "            error(\"TODO: fill matrix element for κA=$(_escape_str(s_α.κ)), κB=$(_escape_str(s_β.κ)), rA=$(s_α.r), rB=$(s_β.r), aA=$(s_α.a), aB=$(s_β.a)\")")
+        tag = zm_mode === nothing ? "" : " ($zm_mode)"
+        println(io, "$indent$keyword $(join(conds, " && "))")
+        println(io, "$indent2# <$(s_α.κ), r=$(s_α.r), a=$(s_α.a) | V | $(s_β.κ), r=$(s_β.r), a=$(s_β.a)>$tag")
+        println(io, "$indent2error(\"TODO: fill matrix element for κA=$(_escape_str(s_α.κ)), κB=$(_escape_str(s_β.κ)), rA=$(s_α.r), rB=$(s_β.r), aA=$(s_α.a), aB=$(s_β.a)\")")
         first = false
     end
-    println(io, "        end")
-    println(io, "        error(\"unreachable: no matching branch for kapA=\$(repr(kapA)) kapB=\$(repr(kapB)) rA=\$rA rB=\$rB aA=\$aA aB=\$aB\")")
+    println(io, "$indentend")
+    println(io, "$(indent)error(\"unreachable: no matching branch for kapA=\$(repr(kapA)) kapB=\$(repr(kapB)) rA=\$rA rB=\$rB aA=\$aA aB=\$aB\")")
 end
 
 # ============ V 模板辅助 ============

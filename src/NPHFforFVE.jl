@@ -2,6 +2,7 @@ module NPHFforFVE
 
 using StaticArrays
 using LinearAlgebra
+using KrylovKit
 
 export single_particle_basis, momentum_states, count_momentum_states
 export D000, D001, D011, D111, Momentum
@@ -348,7 +349,7 @@ export build_X_matrix_zero_momentum
 export build_S_matrix_zero_momentum
 
 include("Hamiltonian.jl")
-export build_hamiltonian_block, compute_spectrum, compute_kinetic_spectrum, write_energy_spectrum
+export build_hamiltonian_block, compute_spectrum, compute_spectrum_eigs, compute_kinetic_spectrum, write_energy_spectrum
 export SystemBasis, build_V_hel_blocks!
 export boost_to_cm
 
