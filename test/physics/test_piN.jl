@@ -1,18 +1,18 @@
 # ==========================================================================
-# πN → πN 测试 (主体代码端到端验证)
+# πN → πN test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个不可约表示 Γ:
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every irrep Γ:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
 #   evals_full = eig(H_raw)
-#   验证: eig(H_proj) ⊂ evals_full
+#   Check: eig(H_proj) ⊂ evals_full
 #
 # π: s=0, I=1, boson, η=-1, m=139.57 MeV
 # N: s=1/2, I=1/2, fermion, η=+1, m=938.92 MeV
-# 可区分粒子 → species=[1,1], κ=("[1]","[1]"), S=I
+# Distinguishable particles → species=[1,1], κ=("[1]","[1]"), S=I
 #
-# 仅费米子不可约表示 (G1±, G2±, H±) 有态
-# I=1/2 和 I=3/2 本征值相同 (同位旋无关相互作用)
+# Only double-valued irreps (G1±, G2±, H±) contain states
+# I=1/2 and I=3/2 have identical eigenvalues (isospin-independent interaction)
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -58,7 +58,7 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 构造参考谱 (I=1/2 和 I=3/2 相同, 同位旋无关)
+# Construct the reference spectrum (identical for I=1/2 and I=3/2; isospin-independent)
 # ============================================================================
 function _build_piN_reference()
     function V_can_func(np, sp, n, s, extra...)
@@ -131,10 +131,10 @@ function _build_piN_reference()
 end
 
 # ============================================================================
-# 验证主体代码
+# Validate the main code
 # ============================================================================
 function _verify_piN(sys, V_func, params, ref, free_Ts, label)
-    println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
+    println("  Free energy levels (first 10 nondegenerate): $(round.(free_Ts, digits=4))")
     println()
     all_ok = true
     for Gamma in irrep_names_piN
@@ -154,7 +154,7 @@ function _verify_piN(sys, V_func, params, ref, free_Ts, label)
         @test ok
     end
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 
@@ -172,7 +172,7 @@ function test_piN_I12(ref, free_Ts)
                      irrep_names_piN)
     params = (C0=C0_piN,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         σ_π_p, σ_N_p = sp
         σ_π, σ_N = s
         σ_π_p == σ_π || return zero(ComplexF64)
@@ -199,7 +199,7 @@ function test_piN_I32(ref, free_Ts)
                      irrep_names_piN)
     params = (C0=C0_piN,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         σ_π_p, σ_N_p = sp
         σ_π, σ_N = s
         σ_π_p == σ_π || return zero(ComplexF64)
@@ -213,7 +213,7 @@ function test_piN_I32(ref, free_Ts)
 end
 
 # ============================================================================
-# 编排
+# Run tests
 # ============================================================================
 function test_piN()
     ref = _build_piN_reference()

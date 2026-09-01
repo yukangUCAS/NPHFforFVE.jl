@@ -1,15 +1,15 @@
 # ==========================================================================
-# D D* → D D* 测试 (主体代码端到端验证)
+# D D* → D D* test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个不可约表示 Γ:
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every irrep Γ:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
 #   evals_full = eig(H_raw)
-#   验证: eig(H_proj) ⊂ evals_full
+#   Check: eig(H_proj) ⊂ evals_full
 #
 # D: s=0, I=1/2, boson, η=+1, m=1864.84 MeV
 # D*: s=1, I=1/2, boson, η=+1, m=2008.5 MeV
-# 可区分粒子 → species=[1,1], κ=("[1]","[1]"), S=I
+# Distinguishable particles → species=[1,1], κ=("[1]","[1]"), S=I
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -55,7 +55,7 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 构造参考谱
+# Construct the reference spectrum
 # ============================================================================
 function _build_ddstar_reference()
     function V_can_func(np, sp, n, s, extra...)
@@ -127,7 +127,7 @@ function _build_ddstar_reference()
 end
 
 # ============================================================================
-# 测试主体
+# test
 # ============================================================================
 function test_ddstar()
     ref = _build_ddstar_reference()
@@ -140,7 +140,7 @@ function test_ddstar()
             for (n_, m_) in zip(nt, per_mass_dds))
         for (nt, _) in ref.all_states]))
     free_Ts_d = distinct_levels(free_Ts, 10)
-    println("自由能级 (前10非简并): $(round.(free_Ts_d, digits=4))")
+    println("Free energy levels (first 10 nondegenerate): $(round.(free_Ts_d, digits=4))")
     println()
 
     ch = FockChannel("DD*", [1,1], [:boson, :boson],
@@ -150,7 +150,7 @@ function test_ddstar()
                      irrep_names_dds)
     params = (C0=C0_dds,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         σ1p, σ2p = sp; σ1, σ2 = s
         σ1p == σ1 || return zero(ComplexF64)
         σ2p == σ2 || return zero(ComplexF64)
@@ -178,7 +178,7 @@ function test_ddstar()
     end
 
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 

@@ -3,6 +3,7 @@ module NPHFforFVE
 using StaticArrays
 using LinearAlgebra
 using KrylovKit
+using SparseArrays
 
 export single_particle_basis, momentum_states, count_momentum_states
 export D000, D001, D011, D111, Momentum
@@ -18,10 +19,8 @@ using .SymmetryGroup: O_h, C4v, C2v, C3v
 using .SymmetryGroup: irrep_matrices, irrep_matrix, OH_IRREP_NAMES
 using .SymmetryGroup: OH2_IRREP_NAMES, LG_IRREP_NAMES
 
-# 三维整数动量矢量类型别名
 const Momentum = SVector{3, Int}
 
-# 常用总动量预设
 const D000 = Momentum(0, 0, 0)
 const D001 = Momentum(0, 0, 1)
 const D011 = Momentum(0, 1, 1)
@@ -30,8 +29,8 @@ const D111 = Momentum(1, 1, 1)
 """
     single_particle_basis(Ncut::Int) -> Vector{Momentum}
 
-生成所有满足 |n|² = n_x² + n_y² + n_z² ≤ Ncut 的三维整数动量矢量，
-按字典序升序排列。
+Generate all three-dimensional integer momentum vectors satisfying
+|n|² = n_x² + n_y² + n_z² ≤ Ncut, sorted lexicographically.
 """
 function single_particle_basis(Ncut::Int)
     basis = Momentum[]
@@ -58,27 +57,26 @@ end
     momentum_states(N::Int; d=Momentum(0,0,0), Ncut::Int, particle_type::Symbol=:distinguishable,
                     species=nothing, particle_types=nothing)
 
-返回一个惰性 Channel，迭代生成所有满足约束的 N 粒子动量态。
+Return a lazy `Channel` that iterates over all constrained `N`-particle momentum states.
 
-# 参数
-- `N`: 粒子总数 (≥1)
-- `d`: 总动量，默认为 `D000 = (0,0,0)`
-- `Ncut`: 动量截断，每个粒子满足 |n_i|^2 ≤ Ncut
-- `particle_type`: `:distinguishable`, `:boson` 或 `:fermion`（单物种时使用）
+# Arguments
+- `N`: total number of particles (≥ 1)
+- `d`: total momentum; defaults to `D000 = (0,0,0)`
+- `Ncut`: momentum cutoff; every particle satisfies |n_i|² ≤ Ncut
+- `particle_type`: `:distinguishable`, `:boson`, or `:fermion` for a single species
 
-# 多物种（分组全同粒子）
-- `species`: 各物种粒子数，如 `[1,2]` 表示 1个A + 2个B；`sum(species) == N`
-- `particle_types`: 各物种对应的粒子类型，长度同 `species`
-  若省略则所有物种共用 `particle_type`
+# Multiple species
+- `species`: particle count for each species; `[1,2]` means one particle of species A and two of species B, with `sum(species) == N`
+- `particle_types`: particle type for each species, with the same length as `species`; if omitted, all species use `particle_type`
 
-# 示例
+# Examples
 ```julia
-# 单物种
+# One species
 for state in momentum_states(3, Ncut=4, particle_type=:fermion, d=D001)
     println(state)
 end
 
-# 多物种：N=3，物种A有1个可区分粒子，物种B有2个全同玻色子
+# Multiple species: N=3, with one distinguishable A particle and two identical B bosons
 for state in momentum_states(3, Ncut=4, species=[1,2], particle_types=[:distinguishable, :boson])
     println(state)
 end
@@ -97,9 +95,10 @@ end
 """
     count_momentum_states(N; d, Ncut, particle_type, species, particle_types) -> Int
 
-计算满足约束的 N 粒子动量态总数，不生成完整态列表。
-参数同 `momentum_states`。
+Count all constrained `N`-particle momentum states without constructing the complete list.
+Arguments are the same as for `momentum_states`.
 """
+
 function count_momentum_states(N::Int; d=Momentum(0,0,0), Ncut::Int, particle_type::Symbol=:distinguishable,
                                species=nothing, particle_types=nothing)
     d_vec = _to_momentum(d)
@@ -110,7 +109,7 @@ function count_momentum_states(N::Int; d=Momentum(0,0,0), Ncut::Int, particle_ty
     return counter[]
 end
 
-# ============ 内部函数 ============
+# ============ Internal functions ============
 
 function _to_momentum(d)
     if d isa Momentum
@@ -120,32 +119,32 @@ function _to_momentum(d)
     elseif d isa AbstractVector{<:Integer}
         return Momentum(d[1], d[2], d[3])
     else
-        throw(ArgumentError("总动量 d 必须是 SVector{3,Int}, NTuple{3,Int} 或长度为3的整数向量"))
+        throw(ArgumentError("total momentum d must be an SVector{3,Int}, NTuple{3,Int}, or an integer vector of length 3"))
     end
 end
 
 function _validate_particle_type(pt::Symbol)
     pt in (:distinguishable, :boson, :fermion) && return nothing
-    throw(ArgumentError("particle_type 必须是 :distinguishable, :boson 或 :fermion"))
+    throw(ArgumentError("particle_type must be :distinguishable, :boson, or :fermion"))
 end
 
-# 统一物种参数为 (spec_sizes, spec_types) 形式，保证向下兼容
+# Normalize species parameters to (spec_sizes, spec_types) for backward compatibility.
 function _normalize_species(N::Int, particle_type::Symbol, species, particle_types)
     if species === nothing
         _validate_particle_type(particle_type)
         return [N], [particle_type]
     end
     if !(species isa AbstractVector{<:Integer})
-        throw(ArgumentError("species 必须是整数向量"))
+        throw(ArgumentError("species must be an integer vector"))
     end
     if sum(species) != N
-        throw(ArgumentError("species 各元素之和必须等于 N"))
+        throw(ArgumentError("the entries of species must sum to N"))
     end
     if particle_types === nothing
         particle_types = fill(particle_type, length(species))
     end
     if length(species) != length(particle_types)
-        throw(ArgumentError("particle_types 长度必须与 species 一致"))
+        throw(ArgumentError("particle_types must have the same length as species"))
     end
     for pt in particle_types
         _validate_particle_type(pt)
@@ -153,7 +152,7 @@ function _normalize_species(N::Int, particle_type::Symbol, species, particle_typ
     return species, particle_types
 end
 
-# 构建粒子→物种映射: spec_of[k] = 粒子 k 所属物种编号
+# Construct particle-to-species map: spec_of[k] is the species index of particle k.
 function _build_spec_of(N::Int, spec_sizes::Vector{Int})
     spec_of = Vector{Int}(undef, N)
     idx = 1
@@ -166,7 +165,7 @@ function _build_spec_of(N::Int, spec_sizes::Vector{Int})
     return spec_of
 end
 
-# 递归生成核心
+# Recursive generation core
 function _generate!(output, basis::Vector{Momentum}, N::Int, d::Momentum,
                     Ncut::Int, spec_sizes::Vector{Int}, spec_types)
     n_basis = length(basis)
@@ -178,13 +177,11 @@ function _generate!(output, basis::Vector{Momentum}, N::Int, d::Momentum,
             n_last = d - partial_sum
             if sum(abs2, n_last) <= Ncut
                 current[N] = n_last
-                # 仅当最后两个粒子同物种时才检查排序约束
+                # Check ordering constraints only when the last two particles have the same species.
                 if N > 1 && spec_of[N-1] == spec_of[N]
                     pt = spec_types[spec_of[N]]
-                    if pt == :boson
+                    if pt == :boson || pt == :fermion
                         isless(n_last, current[N-1]) && return
-                    elseif pt == :fermion
-                        !isless(current[N-1], n_last) && return
                     end
                 end
                 _emit!(output, current)
@@ -204,18 +201,16 @@ function _generate!(output, basis::Vector{Momentum}, N::Int, d::Momentum,
 
             current[level] = n_i
 
-            # 决定下一层起始索引：仅同物种内才施加排序约束
+            # Determine the next-level starting index: impose ordering constraints only within a species.
             if level < N && spec_of[level] == spec_of[level+1]
                 pt = spec_types[spec_of[level]]
-                next_start = if pt == :fermion
-                    i + 1
-                elseif pt == :boson
+                next_start = if pt == :boson || pt == :fermion
                     i
                 else
                     1
                 end
             else
-                next_start = 1  # 不同物种：无约束
+                next_start = 1  # Different species: no constraint.
             end
 
             recurse(level + 1, new_sum, next_start)
@@ -235,15 +230,15 @@ function _emit!(counter::Ref{Int}, current::Vector{Momentum})
     counter[] += 1
 end
 
-# ============ 轨道分解 ============
+# ============ Orbit decomposition ============
 
 """
     find_representatives(N::Int; d=Momentum(0,0,0), Ncut::Int, particle_type::Symbol=:distinguishable,
                          species=nothing, particle_types=nothing)
 
-生成所有代表动量态。每个群作用轨道中字典序最小的态被选为代表。
+Generate all representative momentum states. The lexicographically smallest state in each group-action orbit is selected as the representative.
 
-参数同 `momentum_states`，支持多物种。
+Arguments are the same as for `momentum_states`, including multiple-species support.
 """
 function find_representatives(N::Int; d=Momentum(0,0,0), Ncut::Int, particle_type::Symbol=:distinguishable,
                               species=nothing, particle_types=nothing)
@@ -269,7 +264,7 @@ end
     group_orbit(representative::NTuple{N, Momentum}; d=Momentum(0,0,0),
                 particle_type::Symbol=:distinguishable, species=nothing, particle_types=nothing) where N
 
-返回某个代表动量在对称群作用下的完整轨道（所有互异态）。
+Return the complete orbit of a representative momentum state under the symmetry group.
 """
 function group_orbit(representative::NTuple{N, Momentum}; d=Momentum(0,0,0),
                      particle_type::Symbol=:distinguishable, species=nothing, particle_types=nothing) where N
@@ -290,7 +285,7 @@ function _compute_orbit(state::NTuple{N, Momentum}, group::Vector{<:SMatrix{3,3,
     return collect(orbit_states)
 end
 
-# 群元作用于态，仅在各物种内部分别重排至规范序
+# Apply a group element to a state; reorder into canonical order separately within each species.
 function _apply_group_to_state(g::SMatrix{3,3,Int}, state::NTuple{N, Momentum},
                                spec_sizes::Vector{Int}, spec_types) where N
     transformed = Momentum[apply_transform(g, state[i]) for i in 1:N]
@@ -327,15 +322,21 @@ export wigner_D, get_rotation_vector, build_V_hel
 
 include("ParamStruct.jl")
 export @params, to_vector, from_vector, param_names, param_defaults
-export param_bounds, param_errors, param_limits, param_count, print_params
+export param_count, print_params
 
 include("FockSpace.jl")
-using .FockSpace: FockChannel, FockSystem, setup_fock_system
+using .FockSpace: FockChannel, FockSystem, setup_fock_system, SubchannelExclusion
 using .FockSpace: get_N, get_num_species, get_total_N, get_Ncut, get_isospin_subchannels
+using .FockSpace: _is_subchannel_excluded, _active_subchannels
 using .FockSpace: KineticType, relativistic, nonrelativistic
+using .FockSpace: DynamicMass, dynamic_mass, has_dynamic_mass
+using .FockSpace: resolve_mass, resolve_masses, resolve_particle_masses
 export FockChannel, FockSystem, setup_fock_system
+export SubchannelExclusion
 export get_N, get_num_species, get_total_N, get_Ncut, get_isospin_subchannels
 export KineticType, relativistic, nonrelativistic
+export DynamicMass, dynamic_mass, has_dynamic_mass
+export resolve_mass, resolve_masses, resolve_particle_masses
 
 const ħc = 197.327  # MeV·fm
 
@@ -349,12 +350,26 @@ export build_X_matrix_zero_momentum
 export build_S_matrix_zero_momentum
 
 include("Hamiltonian.jl")
-export build_hamiltonian_block, compute_spectrum, compute_spectrum_eigs, compute_kinetic_spectrum, write_energy_spectrum
+export build_hamiltonian_block, compute_spectrum, compute_spectrum_eigs
+export compute_spectrum_factorized, compute_kinetic_spectrum, write_energy_spectrum
+export channel_decomposition
 export SystemBasis, build_V_hel_blocks!
 export boost_to_cm
 
+include("CacheManagement.jl")
+export cache_info, clear_caches!
+
 include("UserAPI.jl")
-export Project, Config, add_config!, ProjectResult, compute!, setup_project
+export Project, Config, add_config!, exclude_subchannel!, include_subchannel!
+export ProjectRunInfo, ProjectResult, compute!, write_spectrum, setup_project
+export PreparedSpectrumProject, prepare_spectrum
+export SpectrumLevel, SpectrumGroup, SpectrumDataset, spectrum_chisq
+export SpectrumFitProblem
+function minuit end
+function best_params end
+export minuit, best_params
+export AffinePreparedProject, AffineBasisCache, prepare_affine
 export generate_potential_template
+export generate_subchannel_report
 
 end # module

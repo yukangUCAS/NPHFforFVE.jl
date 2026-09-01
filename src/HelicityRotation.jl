@@ -1,8 +1,8 @@
 # ============================================================
-# HelicityRotation — 螺旋度表象 ↔ 正则极化表象 旋转
+# HelicityRotation — Helicity-basis ↔ canonical-polarization-basis rotations
 # ============================================================
-# Wigner D 矩阵实现，支持 j = 0, 1/2, 1。
-# D^j(R_st(n)): 把 ẑ 转到 n̂ 的标准转动。
+# Wigner D-matrix implementation, with public support for j = 0, 1/2, 1, 3/2.
+# D^j(R_st(n)): Standard rotation taking ẑ to n̂.
 # ============================================================
 
 const _D_CACHE = Dict{Tuple{Momentum, Rational{Int}}, Matrix{ComplexF64}}()
@@ -10,7 +10,39 @@ const _ROT_VEC_CACHE = Dict{NamedTuple, Vector{ComplexF64}}()
 const _SPIN_PROJ_CACHE = Dict{Rational{Int}, Vector{Rational{Int}}}()
 const _M_VALS_CACHE = Dict{Tuple, Vector{Vector{Float64}}}()
 
-# ============ 球坐标 ============
+# A CSC sparse matrix is advantageous only when a helicity block has a
+# sufficiently small fill fraction. Dense blocks are faster to build and to
+# multiply by projection matrices when most entries are nonzero.
+const _V_HEL_DENSE_FILL_THRESHOLD = 0.20
+
+"""
+    _finalize_V_hel_block(m, n, triplets) -> AbstractMatrix{ComplexF64}
+
+Store a completed helicity block densely when its nonzero fill fraction is at
+least `_V_HEL_DENSE_FILL_THRESHOLD`; otherwise retain the existing CSC sparse
+representation. This routine changes only storage, not any matrix element.
+Repeated triplets are accumulated in the same way as `sparse`.
+"""
+function _finalize_V_hel_block(m::Int, n::Int,
+                               triplets::Vector{Tuple{Int,Int,ComplexF64}})
+    isempty(triplets) && return spzeros(ComplexF64, m, n)
+
+    fill_fraction = length(triplets) / (Float64(m) * Float64(n))
+    if fill_fraction >= _V_HEL_DENSE_FILL_THRESHOLD
+        block = zeros(ComplexF64, m, n)
+        @inbounds for (i, j, value) in triplets
+            block[i, j] += value
+        end
+        return block
+    end
+
+    I = Int[t[1] for t in triplets]
+    J = Int[t[2] for t in triplets]
+    V = ComplexF64[t[3] for t in triplets]
+    return sparse(I, J, V, m, n)
+end
+
+# ============ Spherical coordinates ============
 
 function _sph_coords(n::Momentum)
     r = sqrt(Float64(sum(abs2, n)))
@@ -20,7 +52,7 @@ function _sph_coords(n::Momentum)
     cosθ = n[3] / r
     sinθ = sqrt(n[1]^2 + n[2]^2) / r
     if sinθ == 0.0
-        # φ 约定: n_z > 0 → φ = 0; n_z < 0 → φ = -π (与 _momentum_to_euler 一致)
+        # φ convention: n_z > 0 → φ = 0; n_z < 0 → φ = -π (consistent with _momentum_to_euler).
         if cosθ < 0.0
             return cosθ, sinθ, -1.0, 0.0  # θ=π, φ=-π
         else
@@ -32,41 +64,53 @@ function _sph_coords(n::Momentum)
     return cosθ, sinθ, cosφ, sinφ
 end
 
-# ============ Wigner 小 d 矩阵 ============
+# ============ Wigner small-d matrix ============
 
 function _wigner_small_d(j::Rational{Int}, cosθ::Float64, sinθ::Float64)
-    if j == 0
-        return ComplexF64[1.0+0.0im;;]
-    elseif j == 1//2
-        c = cos(acos(cosθ) / 2)
-        s = sin(acos(cosθ) / 2)
-        # 更稳的公式: cos(θ/2) = sqrt((1+cosθ)/2), sin(θ/2) = sqrt((1-cosθ)/2)
-        # 但需要处理符号。用标准约定:
-        cθ2 = sqrt((1.0 + cosθ) / 2.0)
-        sθ2 = (sinθ >= 0 ? 1.0 : -1.0) * sqrt(max(0.0, (1.0 - cosθ) / 2.0))
-        return ComplexF64[cθ2+0.0im -sθ2+0.0im;
-                          sθ2+0.0im  cθ2+0.0im]
-    elseif j == 1
-        c = cosθ
-        s = sinθ
-        c2 = (1.0 + c) / 2.0
-        s2 = (1.0 - c) / 2.0
-        return ComplexF64[c2+0.0im    -s/sqrt(2)+0.0im    s2+0.0im;
-                          s/sqrt(2)+0.0im   c+0.0im   -s/sqrt(2)+0.0im;
-                          s2+0.0im     s/sqrt(2)+0.0im    c2+0.0im]
-    else
-        throw(ArgumentError("自旋 j=$j 暂不支持，仅支持 0, 1/2, 1"))
+    j >= 0 && denominator(j) in (1, 2) ||
+        throw(ArgumentError("spin j=$j must be a nonnegative integer or half-integer"))
+
+    dim = Int(2j + 1)
+    m_values = Rational{Int}[j - i for i in 0:(dim - 1)]
+    c = sqrt(max(0.0, (1.0 + clamp(cosθ, -1.0, 1.0)) / 2.0))
+    s = copysign(sqrt(max(0.0, (1.0 - clamp(cosθ, -1.0, 1.0)) / 2.0)),
+                 sinθ)
+    result = zeros(ComplexF64, dim, dim)
+
+    # Condon–Shortley convention, with rows/columns ordered as
+    # m = j, j-1, ..., -j. This reproduces the previous closed forms for
+    # j=0, 1/2, 1 and extends the same convention to j=3/2.
+    for (row, mprime) in enumerate(m_values), (col, m) in enumerate(m_values)
+        prefactor = sqrt(Float64(
+            factorial(Int(j + mprime)) * factorial(Int(j - mprime)) *
+            factorial(Int(j + m)) * factorial(Int(j - m))))
+        kmin = max(0, Int(m - mprime))
+        kmax = min(Int(j + m), Int(j - mprime))
+        value = 0.0
+        for k in kmin:kmax
+            denominator_value =
+                factorial(Int(j + m - k)) * factorial(k) *
+                factorial(Int(mprime - m + k)) *
+                factorial(Int(j - mprime - k))
+            sign = isodd(Int(mprime - m + k)) ? -1.0 : 1.0
+            cpower = Int(2j + m - mprime - 2k)
+            spower = Int(mprime - m + 2k)
+            value += sign * prefactor / denominator_value *
+                     c^cpower * s^spower
+        end
+        result[row, col] = value
     end
+    return result
 end
 
-# ============ Wigner D 矩阵 ============
+# ============ Wigner D matrix ============
 
 """
     wigner_D(j::Rational{Int}, n::Momentum) -> Matrix{ComplexF64}
 
-返回 D^j(R_st(n)): 把 ẑ 转到 n̂ 的标准转动 Wigner D 矩阵。
+Return D^j(R_st(n)), the Wigner D matrix of the standard rotation taking ẑ to n̂.
 D^j_{m,m'}(φ,θ,0) = e^{-imφ} d^j_{m,m'}(θ)。
-零动量返回单位阵。
+At zero momentum, return the identity matrix.
 """
 function wigner_D(j::Rational{Int}, n::Momentum)
     key = (n, j)
@@ -84,7 +128,7 @@ function _compute_wigner_D(j::Rational{Int}, n::Momentum)
     if phi >= pi - 1e-15
         phi = -pi
     end
-    # m = j, j-1, ..., -j  (从上到下: 行 1,2,...,dim)
+    # m = j, j-1, ..., -j  (top to bottom: rows 1,2,...,dim)
     D = similar(dmat)
     for (i, m) in enumerate(Float64(j):-1:(-Float64(j)))
         phase = exp(ComplexF64(0.0, -m * phi))
@@ -95,15 +139,15 @@ function _compute_wigner_D(j::Rational{Int}, n::Momentum)
     return D
 end
 
-# ============ 螺旋度 → 正则极化 旋转系数向量 ============
+# ============ Helicity → canonical-polarization rotation-coefficient vector ============
 
 """
     get_rotation_vector(n_tuple, lambda_tuple, per_spin) -> Vector{ComplexF64}
 
-返回单个子空间态 (n_tuple, λ_tuple) 的旋转系数向量 c_σ。
+Return the rotation-coefficient vector c_σ for one subspace state `(n_tuple, λ_tuple)`.
 c_σ = ∏_i D^{j_i}_{σ_i, λ_i}(R_st(n_i))
 
-per_spin 是每粒子自旋列表 (长度 N, 元素 Rational{Int})。
+per_spin is the list of per-particle spins (length N; entries are Rational{Int}).
 """
 function get_rotation_vector(n_tuple::NTuple{N, Momentum},
                              lambda_tuple::NTuple{N, <:Real},
@@ -120,24 +164,24 @@ end
 function _compute_rotation_vector(n_tuple::NTuple{N, Momentum},
                                   lambda_tuple::NTuple{N, Rational{Int}},
                                   per_spin::Vector{Rational{Int}}) where N
-    # 每粒子 D 矩阵和螺旋度索引
+    # Per-particle D matrices and helicity indices
     D_mats = [wigner_D(per_spin[i], n_tuple[i]) for i in 1:N]
-    # m 值: j, j-1, ..., -j (仅依赖 per_spin)
+    # m values: j, j-1, ..., -j (depends only on per_spin)
     m_vals = get!(_M_VALS_CACHE, Tuple(per_spin)) do
         [collect(Float64(j):-1:(-Float64(j))) for j in per_spin]
     end
-    # λ 在各 D 矩阵中的列索引 (1-based)
+    # λ column indices in the D matrices (1-based)
     lam_indices = [findfirst(x -> Float64(x) == Float64(lambda_tuple[i]), m_vals[i])
                    for i in 1:N]
     any(x -> x === nothing, lam_indices) &&
-        throw(ArgumentError("螺旋度 $lambda_tuple 不在自旋投影范围内"))
+        throw(ArgumentError("helicity $lambda_tuple is outside the allowed spin-projection range"))
 
-    # 枚举所有 σ 构型
+    # Enumerate all σ configurations
     σ_ranges = [1:length(m_vals[i]) for i in 1:N]
     total_dim = prod(length.(σ_ranges))
     vec = Vector{ComplexF64}(undef, total_dim)
 
-    # 逐 σ 构型计算
+    # Evaluate each σ configuration
     for (flat_idx, σ_indices) in enumerate(Base.Iterators.product(σ_ranges...))
         coeff = ComplexF64(1.0, 0.0)
         for i in 1:N
@@ -151,23 +195,23 @@ end
 """
     get_rotation_vector(n_tuple, lambda_tuple, spins, species) -> Vector{ComplexF64}
 
-便利函数: 接受 per-species 的 spins 和 species，自动展开为 per-particle。
+Convenience function: accept per-species spins and species, then expand them per particle.
 """
 
-# ============ V_can → V_hel 变换 ============
+# ============ V_can → V_hel transformation ============
 
 """
     build_V_hel(subspace_states_α, subspace_states_β,
                 per_spin_α, per_spin_β, V_can_func, extra_args...)
         -> Matrix{ComplexF64}
 
-从正则极化表象下的 V_can 构造螺旋度表象下的 V_hel (K_α × K_β)。
+Construct helicity-basis V_hel from canonical-polarization-basis V_can (K_α × K_β)。
 
-# 参数
-- `subspace_states_α/β`: `_collect_subspace_states` 返回的态列表，每项 `(n_tuple, λ_tuple)`
-- `per_spin_α/β`: 每粒子自旋 (长度 N_α/N_β)
-- `V_can_func(n'_tuple, σ'_tuple, n_tuple, σ_tuple, extra_args...)`: 返回 V_can 矩阵元
-- `extra_args...`: 透传给 V_can_func 的额外参数 (如 kapA, kapB, rA, rB, aA, aB, params)
+# Arguments
+- `subspace_states_α/β`: `_collect_subspace_states` state list returned by _collect_subspace_states; each entry is `(n_tuple, λ_tuple)`
+- `per_spin_α/β`: per-particle spins (length N_α/N_β)
+- `V_can_func(n'_tuple, σ'_tuple, n_tuple, σ_tuple, extra_args...)`: returns a V_can matrix element
+- `extra_args...`: additional arguments forwarded to V_can_func (for example kapA, kapB, rA, rB, params)
 
 V_hel[k', k] = Σ_{σ',σ} conj(c^(k')_{σ'}) · V_can(n'^(k'), σ', n^(k), σ) · c^(k)_{σ}
 """
@@ -176,24 +220,24 @@ function build_V_hel(subspace_states_α::Vector,
                      per_spin_α::AbstractVector{<:Real},
                      per_spin_β::AbstractVector{<:Real},
                      V_can_func::Function, extra_args...;
-                     V_filter=nothing)
+                     entry_filter=nothing)
     K_α = length(subspace_states_α)
     K_β = length(subspace_states_β)
-    K_α == 0 && return Matrix{ComplexF64}(undef, 0, 0)
-    K_β == 0 && return Matrix{ComplexF64}(undef, 0, 0)
+    K_α == 0 && return spzeros(ComplexF64, 0, 0)
+    K_β == 0 && return spzeros(ComplexF64, 0, 0)
 
-    # 预计算所有子空间态的旋转系数向量
+    # Precompute rotation-coefficient vectors for all subspace states
     rot_α = [get_rotation_vector(n, lam, per_spin_α) for (n, lam) in subspace_states_α]
     rot_β = [get_rotation_vector(n, lam, per_spin_β) for (n, lam) in subspace_states_β]
 
     dim_σα = length(rot_α[1])
     dim_σβ = length(rot_β[1])
 
-    # 去重动量构型 (相同 n_tuple 的态共享正则极化基)
+    # Deduplicate momentum configurations (states with the same n_tuple share a canonical-polarization basis)
     n_α_unique = unique!([n for (n, _) in subspace_states_α])
     n_β_unique = unique!([n for (n, _) in subspace_states_β])
 
-    # 探测 V_can 返回值类型: 标量 → dim_κ=1; 矩阵 → 取行/列数
+    # Probe the V_can return type: scalar → dim_κ=1; matrix → use its row/column sizes
     σ_probe_α = _σ_configurations(n_α_unique[1], per_spin_α)
     σ_probe_β = _σ_configurations(n_β_unique[1], per_spin_β)
     sample = V_can_func(n_α_unique[1], σ_probe_α[1],
@@ -201,7 +245,7 @@ function build_V_hel(subspace_states_α::Vector,
     dim_κA = sample isa Number ? 1 : size(sample, 1)
     dim_κB = sample isa Number ? 1 : size(sample, 2)
 
-    # 动量 → helicity 态索引: 相同动量 n 的态共享 V_can 块
+    # momentum → helicity-state indices: states of equal momentum n share a V_can block
     n_to_k_α = Dict{eltype(n_α_unique), Vector{Int}}()
     for (k, (n, _)) in enumerate(subspace_states_α)
         push!(get!(Vector{Int}, n_to_k_α, n), k)
@@ -211,24 +255,28 @@ function build_V_hel(subspace_states_α::Vector,
         push!(get!(Vector{Int}, n_to_k_β, n), k)
     end
 
-    # 融合: 计算 V_can 块并直接散射到 V_hel, 无中间 Dict
+    # Fused: evaluate V_can blocks and scatter directly into V_hel, without an intermediate Dict
     n_α_list = collect(n_α_unique)
     n_β_list = collect(n_β_unique)
     N_α = length(n_α_list)
     N_β = length(n_β_list)
     n_pairs = N_α * N_β
 
-    V_hel = zeros(ComplexF64, K_α * dim_κA, K_β * dim_κB)
+    m = K_α * dim_κA
+    n = K_β * dim_κB
 
-    # σ 构型仅依赖 per_spin，与 n 无关 → 预计算一次
+    # σ configurations depend only on per_spin, not n → precompute once
     σ_vals_all_α = _σ_configurations(per_spin_α)
     σ_vals_all_β = _σ_configurations(per_spin_β)
 
-    # 线程局部 block 缓冲区池 (避免 per-pair zeros 分配)
+    # Thread-local block-buffer pool (avoid per-pair zeros allocations)
     blk_rows = dim_σα * dim_κA
     blk_cols = dim_σβ * dim_κB
     n_threads = Threads.nthreads()
     block_pool = [zeros(ComplexF64, blk_rows, blk_cols) for _ in 1:n_threads]
+
+    # Per-thread triplet buffer
+    triplets = [Tuple{Int,Int,ComplexF64}[] for _ in 1:n_threads]
 
     Threads.@threads for idx in 1:n_pairs
         i_α = (idx - 1) ÷ N_β + 1
@@ -236,13 +284,13 @@ function build_V_hel(subspace_states_α::Vector,
         n_α = n_α_list[i_α]
         n_β = n_β_list[i_β]
 
-        # 轻量预筛: 先试一个 σ 对，filter 全拒则跳过
+        # Lightweight prefilter: test one σ pair first; skip if filter rejects everything
         σ_vals_α = σ_vals_all_α
         σ_vals_β = σ_vals_all_β
-        if V_filter !== nothing
+        if entry_filter !== nothing
             any_pass = false
             for σα in σ_vals_α, σβ in σ_vals_β
-                if V_filter(n_α, σα, n_β, σβ)
+                if entry_filter(n_α, σα, n_β, σβ)
                     any_pass = true
                     break
                 end
@@ -250,15 +298,16 @@ function build_V_hel(subspace_states_α::Vector,
             any_pass || continue
         end
 
-        # 取线程局部 block，fill! 清零复用
-        block = block_pool[Threads.threadid()]
+        # take a thread-local block, clear it with fill!, and reuse it
+        tid = Threads.threadid()
+        block = block_pool[tid]
         fill!(block, 0)
         any_nonzero = false
         for (i_σα, σα) in enumerate(σ_vals_α)
             r0_b = (i_σα - 1) * dim_κA + 1
             for (i_σβ, σβ) in enumerate(σ_vals_β)
                 c0_b = (i_σβ - 1) * dim_κB + 1
-                if V_filter !== nothing && !V_filter(n_α, σα, n_β, σβ)
+                if entry_filter !== nothing && !entry_filter(n_α, σα, n_β, σβ)
                     continue
                 end
                 val = V_can_func(n_α, σα, n_β, σβ, extra_args...)
@@ -275,7 +324,8 @@ function build_V_hel(subspace_states_α::Vector,
         end
         any_nonzero || continue
 
-        # 散射到所有对应 helicity 态
+        # scatter to all matching helicity states → collect nonzero triplets
+        buf = triplets[tid]
         k_list_α = n_to_k_α[n_α]
         k_list_β = n_to_k_β[n_β]
         for k_α in k_list_α
@@ -295,66 +345,84 @@ function build_V_hel(subspace_states_α::Vector,
                             s += ca * block[(i_σα-1)*dim_κA+a, (i_σβ-1)*dim_κB+b] * cb
                         end
                     end
-                    V_hel[r0+a-1, c0+b-1] = s
+                    iszero(s) || push!(buf, (r0 + a - 1, c0 + b - 1, s))
                 end
             end
         end
     end
 
-    return V_hel
+    # merge triplets → choose sparse or dense storage based on fill fraction
+    all_t = vcat(triplets...)
+    return _finalize_V_hel_block(m, n, all_t)
 end
 
-# ============ V_hel 直接输入 (无 Wigner 旋转) ============
+# ============ Direct V_hel input (without Wigner rotation) ============
 
 """
     build_V_hel_direct(subspace_states_α, subspace_states_β,
                        V_hel_adapter, extra_args...) -> Matrix{ComplexF64}
 
-直接从螺旋度表象下的 V_hel 矩阵元构造 V_hel (K_α·dim_κA × K_β·dim_κB)。
+Construct V_hel directly from helicity-basis matrix elements (K_α·dim_κA × K_β·dim_κB)。
 
-与 `build_V_hel` 的区别：不需要 Wigner D 旋转，不需要 σ 枚举。
-用户提供的 `V_hel_adapter(n_α, λ_α, n_β, λ_β, extra_args...)` 直接返回
-螺旋度基下的矩阵元（标量或 dim_κA × dim_κB 矩阵）。
+Unlike `build_V_hel`, this requires neither Wigner-D rotations nor σ enumeration.
+The user supplies `V_hel_adapter(n_α, λ_α, n_β, λ_β, extra_args...)` directly returns
+a helicity-basis matrix element (a scalar or a dim_κA × dim_κB matrix).
 """
 function build_V_hel_direct(subspace_states_α::Vector,
                             subspace_states_β::Vector,
                             V_hel_adapter::Function, extra_args...;
-                            V_filter=nothing)
+                            entry_filter=nothing)
     K_α = length(subspace_states_α)
     K_β = length(subspace_states_β)
-    K_α == 0 && return Matrix{ComplexF64}(undef, 0, 0)
-    K_β == 0 && return Matrix{ComplexF64}(undef, 0, 0)
+    K_α == 0 && return spzeros(ComplexF64, 0, 0)
+    K_β == 0 && return spzeros(ComplexF64, 0, 0)
 
-    # 探测 dim_κ
+    # Probe dim_κ
     n_α_0, λ_α_0 = subspace_states_α[1]
     n_β_0, λ_β_0 = subspace_states_β[1]
     sample = V_hel_adapter(n_α_0, λ_α_0, n_β_0, λ_β_0, extra_args...)
     dim_κA = sample isa Number ? 1 : size(sample, 1)
     dim_κB = sample isa Number ? 1 : size(sample, 2)
 
-    V_hel = zeros(ComplexF64, K_α * dim_κA, K_β * dim_κB)
-    for k_α in 1:K_α
+    m = K_α * dim_κA
+    n = K_β * dim_κB
+
+    # Per-thread triplet buffer
+    n_threads = Threads.nthreads()
+    triplets = [Tuple{Int,Int,ComplexF64}[] for _ in 1:n_threads]
+
+    n_pairs = K_α * K_β
+    Threads.@threads for idx in 1:n_pairs
+        k_α = (idx - 1) ÷ K_β + 1
+        k_β = (idx - 1) % K_β + 1
         n_α, λ_α = subspace_states_α[k_α]
+        n_β, λ_β = subspace_states_β[k_β]
         r0 = (k_α - 1) * dim_κA + 1
-        for k_β in 1:K_β
-            n_β, λ_β = subspace_states_β[k_β]
-            c0 = (k_β - 1) * dim_κB + 1
-            V_filter !== nothing && !V_filter(n_α, λ_α, n_β, λ_β) && continue
-            val = V_hel_adapter(n_α, λ_α, n_β, λ_β, extra_args...)
-            if val isa Number
-                V_hel[r0, c0] = val
-            else
-                V_hel[r0:r0+dim_κA-1, c0:c0+dim_κB-1] .= val
+        c0 = (k_β - 1) * dim_κB + 1
+        entry_filter !== nothing && !entry_filter(n_α, λ_α, n_β, λ_β) && continue
+        val = V_hel_adapter(n_α, λ_α, n_β, λ_β, extra_args...)
+        buf = triplets[Threads.threadid()]
+        if val isa Number
+            iszero(val) && continue
+            push!(buf, (r0, c0, val))
+        else
+            for a in 1:dim_κA, b in 1:dim_κB
+                v = val[a, b]
+                iszero(v) && continue
+                push!(buf, (r0 + a - 1, c0 + b - 1, v))
             end
         end
     end
-    return V_hel
+
+    # merge triplets → choose sparse or dense storage based on fill fraction
+    all_t = vcat(triplets...)
+    return _finalize_V_hel_block(m, n, all_t)
 end
 
 """
     _σ_configurations(n_tuple, per_spin) -> Vector{NTuple{N, Rational{Int}}}
 
-返回给定动量构型 n_tuple 下所有可能的正则极化 σ 构型。
+Return all possible canonical-polarization σ configurations for a momentum configuration n_tuple.
 σ_i ∈ {-j_i, -j_i+1, ..., j_i}。
 """
 function _σ_configurations(n_tuple::NTuple{N, Momentum},

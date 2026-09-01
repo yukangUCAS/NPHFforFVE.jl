@@ -1,14 +1,14 @@
 # ==========================================================================
-# ππ → ππ 测试 (主体代码端到端验证)
+# ππ → ππ test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个不可约表示 Γ:
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every irrep Γ:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
 #   evals_full = eig(H_raw, S)
-#   验证: eig(H_proj) ⊂ evals_full
+#   Check: eig(H_proj) ⊂ evals_full
 #
 # π: s=0, I=1, boson, η=-1, m=140.0 MeV
-# 全同玻色子 × 2, I=2 → κ=[2]
+# Two identical bosons, I=2 → κ=[2]
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -48,12 +48,12 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 测试主体
+# test
 # ============================================================================
 function test_pipi()
     C0 = 0.5
 
-    # ---- V_can 供参考谱用 ----
+    # ---- V_can for the reference spectrum ----
     function V_can_func(np, sp, n, s, extra...)
         ffall = 1.0
         for n_ in np; ffall *= ff_pipi(n_); end
@@ -61,7 +61,7 @@ function test_pipi()
         ComplexF64(C0 * ffall)
     end
 
-    # ---- 参考谱: 底层全空间枚举 ----
+    # ---- Reference spectrum: enumerate the underlying full space ----
     reps = NPHFforFVE.find_representatives(N_α_pipi; Ncut=Ncut_pipi, d=d_pipi,
         species=species_pipi, particle_types=particle_pipi)
 
@@ -110,7 +110,7 @@ function test_pipi()
             for (n_, m_) in zip(nt, per_mass_pipi))
         for (nt, _) in all_states]))
     free_Ts_d = distinct_levels(free_Ts, 10)
-    println("自由能级 (前10非简并): $(round.(free_Ts_d, digits=4))")
+    println("Free energy levels (first 10 nondegenerate): $(round.(free_Ts_d, digits=4))")
 
     # S matrix
     S_big = NPHFforFVE.build_S_matrix(all_states, N_α_pipi, "[2]", :boson)
@@ -139,7 +139,7 @@ function test_pipi()
 
     H_raw = T_raw + fv_factor * V_hel
 
-    # 参考本征值
+    # Reference eigenvalues
     S_eig = eigen(Hermitian(S_big))
     good_S = S_eig.values .> 1e-12
     U = S_eig.vectors[:, good_S]
@@ -150,14 +150,14 @@ function test_pipi()
     println("reference eigenvalues = $(length(evals_full))")
     println()
 
-    # ---- 主体: FockSystem + build_hamiltonian_block ----
+    # ---- Main path: FockSystem + build_hamiltonian_block ----
     ch = FockChannel("ππ", [2], [:boson], [m_π_pipi], [0//1], [1//1], [-1.0],
                      NPHFforFVE.relativistic)
     sys = FockSystem(NPHFforFVE.D000, Ncut_pipi, [ch], L0_pipi, a_pipi, 2//1,
                      NPHFforFVE.SymmetryGroup.OH_IRREP_NAMES)
     params = (C0=C0,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         ffall = 1.0
         for n_ in nA; ffall /= (1.0 + Float64(sum(abs2, n_)) / Λ_n²_pipi)^2; end
         for n_ in nB; ffall /= (1.0 + Float64(sum(abs2, n_)) / Λ_n²_pipi)^2; end
@@ -183,7 +183,7 @@ function test_pipi()
     end
 
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 

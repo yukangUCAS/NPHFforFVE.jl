@@ -1,17 +1,17 @@
 # ==========================================================================
-# D D* → D D* p-波 测试 (主体代码端到端验证)
+# D D* → D D* P-wave test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个不可约表示 Γ:
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every irrep Γ:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
 #   evals_full = eig(H_raw)
-#   验证: eig(H_proj) ⊂ evals_full
+#   Check: eig(H_proj) ⊂ evals_full
 #
 # D: s=0, I=1/2, boson, η=+1, m=1864.84 MeV
 # D*: s=1, I=1/2, boson, η=+1, m=2008.50 MeV
-# 可区分粒子 → species=[1,1], κ=("[1]","[1]"), S=I
+# Distinguishable particles → species=[1,1], κ=("[1]","[1]"), S=I
 #
-# p-波作用: V ∝ p·p' × Y_{1,-σ'}(p̂') × Y_{1,-σ}(p̂)* × ff
+# P-wave interaction: V ∝ p·p' × Y_{1,-σ'}(p̂') × Y_{1,-σ}(p̂)* × ff
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -71,7 +71,7 @@ function fm_poly(m::Int, n::Momentum)
 end
 
 # ============================================================================
-# 构造参考谱
+# Construct the reference spectrum
 # ============================================================================
 function _build_ddstar_pwave_reference()
     function V_can_func(np, sp, n, s, extra...)
@@ -147,12 +147,12 @@ function _build_ddstar_pwave_reference()
 end
 
 # ============================================================================
-# 测试主体
+# test
 # ============================================================================
 function test_ddstar_pwave()
     ref = _build_ddstar_pwave_reference()
 
-    println("D D* → D D*  p-波  I=0  Ncut=$Ncut_pw")
+    println("D D* → D D*  P-wave  I=0  Ncut=$Ncut_pw")
     println("K = $(ref.K) states,  reference eigenvalues = $(length(ref.evals_full))")
 
     free_Ts = sort(unique(Float64[
@@ -160,7 +160,7 @@ function test_ddstar_pwave()
             for (n_, m_) in zip(nt, per_mass_pw))
         for (nt, _) in ref.all_states]))
     free_Ts_d = distinct_levels(free_Ts, 10)
-    println("自由能级 (前10非简并): $(round.(free_Ts_d, digits=4))")
+    println("Free energy levels (first 10 nondegenerate): $(round.(free_Ts_d, digits=4))")
     println()
 
     ch = FockChannel("DD*", [1,1], [:boson, :boson],
@@ -170,7 +170,7 @@ function test_ddstar_pwave()
                      irrep_names_pw)
     params = (C0=C0_pw,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         sp[1] == 0 && s[1] == 0 || return zero(ComplexF64)
         nDsp, nDs = nA[2], nB[2]
         σp, σ = Int(sp[2]), Int(s[2])
@@ -202,7 +202,7 @@ function test_ddstar_pwave()
     end
 
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 

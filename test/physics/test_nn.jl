@@ -1,17 +1,17 @@
 # ==========================================================================
-# NN → NN 测试 (主体代码端到端验证)
+# NN → NN test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个不可约表示 Γ:
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every irrep Γ:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
 #   evals_full = eig(H_raw, S)
-#   验证: eig(H_proj) ⊂ evals_full
+#   Check: eig(H_proj) ⊂ evals_full
 #
 # N: s=1/2, I=1/2, fermion, η=+1, m=938.92 MeV
-# 全同费米子 × 2
+# Two identical fermions
 #
-# I=1 (对称) + κ=[2] (对称) → S=0 (反对称): sign_ex = -1
-# I=0 (反对称) + κ=[1,1] (反对称) → S=1 (对称): sign_ex = +1
+# I=1 (symmetric) + κ=[2] (symmetric) → S=0 (antisymmetric): sign_ex = -1
+# I=0 (antisymmetric) + κ=[1,1] (antisymmetric) → S=1 (symmetric): sign_ex = +1
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -51,7 +51,7 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 通用辅助: 构造参考谱
+# Common helper: construct the reference spectrum
 # ============================================================================
 function _build_nn_reference(kappa, sign_ex, C0, I_label)
     function V_can_func(np, sp, n, s, extra...)
@@ -67,6 +67,8 @@ function _build_nn_reference(kappa, sign_ex, C0, I_label)
 
     reps = NPHFforFVE.find_representatives(N_α_nn; Ncut=Ncut_nn, d=d_nn,
         species=species_nn, particle_types=particle_nn)
+    zero_pair = (M_nn(0,0,0), M_nn(0,0,0))
+    @test zero_pair in reps
 
     all_states = []
     state_to_idx = Dict()
@@ -106,8 +108,9 @@ function _build_nn_reference(kappa, sign_ex, C0, I_label)
     end
 
     K = length(all_states)
+    @test any(st -> st[1] == zero_pair, all_states)
 
-    # S matrix: 按 n_tuple 分组，ZM 组用 build_S_matrix_zero_momentum
+    # S matrix: grouped by `n_tuple`; ZM groups use `build_S_matrix_zero_momentum`
     S_big = zeros(Float64, K, K)
     n_tuple_to_idxs = Dict{Tuple, Vector{Int}}()
     for (idx, (n_tup, _)) in enumerate(all_states)
@@ -141,7 +144,7 @@ function _build_nn_reference(kappa, sign_ex, C0, I_label)
     fv_factor = (2π * ħc_nn / L_phys_nn)^(dd / 2)
     H_raw = T_diag * S_big + fv_factor * V_hel
 
-    # 广义本征值
+    # Generalized eigenvalue problem
     S_eig = eigen(Hermitian(S_big))
     good_S = S_eig.values .> 1e-12
     if all(good_S)
@@ -158,10 +161,11 @@ function _build_nn_reference(kappa, sign_ex, C0, I_label)
 end
 
 # ============================================================================
-# 通用辅助: 验证主体代码
+# Common helper: validate the main code
 # ============================================================================
 function _verify_nn(sys, V_func, params, ref, free_Ts, label)
-    println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
+    println("  Free energy levels (first 10 nondegenerate): $(round.(free_Ts, digits=4))")
+    @test isapprox(first(free_Ts), 2m_N_nn; atol=1e-10)
     println()
 
     all_ok = true
@@ -183,7 +187,7 @@ function _verify_nn(sys, V_func, params, ref, free_Ts, label)
         @test ok
     end
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 
@@ -211,7 +215,7 @@ function test_nn_I1()
                      NPHFforFVE.SymmetryGroup.OH_IRREP_NAMES)
     params = (C0=C0,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         diag = (sp[1] == s[1] && sp[2] == s[2]) ? 1.0 : 0.0
         exch = (sp[1] == s[2] && sp[2] == s[1]) ? 1.0 : 0.0
         sf = diag + sign_ex * exch
@@ -249,7 +253,7 @@ function test_nn_I0()
                      NPHFforFVE.SymmetryGroup.OH_IRREP_NAMES)
     params = (C0=C0,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         diag = (sp[1] == s[1] && sp[2] == s[2]) ? 1.0 : 0.0
         exch = (sp[1] == s[2] && sp[2] == s[1]) ? 1.0 : 0.0
         sf = diag + sign_ex * exch
@@ -264,7 +268,7 @@ function test_nn_I0()
 end
 
 # ============================================================================
-# 编排
+# Run tests
 # ============================================================================
 function test_nn()
     ok1 = test_nn_I1()

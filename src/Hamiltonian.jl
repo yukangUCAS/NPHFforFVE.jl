@@ -1,23 +1,58 @@
 # ============================================================
-# Hamiltonian — 投影哈密顿量编排
+# Hamiltonian — Projected-Hamiltonian orchestration
 # ============================================================
-# 三级分块:
-#   Level 1: (rep_α,lam_α) × (rep_β,lam_β) → project_V 原子块
-#   Level 2: 子道对 (κ_α,r_α, κ_β,r_β, Γ) → Level 1 块拼接
-#   Level 3: 道对 (α,β) → Level 2 块拼接 → 最终大矩阵
+# Three-level block hierarchy:
+#   Level 1: (rep_α,lam_α) × (rep_β,lam_β) → project_V atomic block
+#   Level 2: subchannel pairs (κ_α,r_α, κ_β,r_β, Γ) → Level 1 block assembly
+#   Level 3: channel pair (α,β) → Level 2 block assembly → final full matrix
 # ============================================================
 
 const _PROJ_CACHE = Dict{NamedTuple, @NamedTuple{
     X::Matrix{ComplexF64}, states::Vector, Z::Vector{Float64}}}()
 const _PROJ_LIST_CACHE = Dict{NamedTuple, Vector}()
+const _PROJ_ORBIT_CACHE = Dict{NamedTuple, _PreparedProjectionOrbit}()
+const _PROJ_ORBIT_CACHE_LOCK = ReentrantLock()
 
-# ============ 优化管道: 跨不可约表示共享的几何缓存 ============
+function _clear_projection_orbit_cache!()
+    lock(_PROJ_ORBIT_CACHE_LOCK) do
+        empty!(_PROJ_ORBIT_CACHE)
+    end
+    return nothing
+end
+
+function _projection_orbit_cache_size()
+    return lock(_PROJ_ORBIT_CACHE_LOCK) do
+        length(_PROJ_ORBIT_CACHE)
+    end
+end
+
+function _get_prepared_projection_orbit(
+        n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
+        d::Momentum, species_type::Symbol) where N
+    needs_double = species_type == :fermion
+    key = (n_tuple=n_tuple, lambda_tuple=lambda_tuple,
+           d=d, double_cover=needs_double)
+    cached = lock(_PROJ_ORBIT_CACHE_LOCK) do
+        get(_PROJ_ORBIT_CACHE, key, nothing)
+    end
+    cached === nothing || return cached
+
+    group_els, _ = group_for_momentum(d; double_cover=needs_double)
+    n_base = needs_double ? length(group_els) ÷ 2 : length(group_els)
+    orbit = _prepare_projection_orbit(
+        n_tuple, lambda_tuple, group_els, n_base)
+    return lock(_PROJ_ORBIT_CACHE_LOCK) do
+        get!(_PROJ_ORBIT_CACHE, key, orbit)
+    end
+end
+
+# ============ Optimized pipeline: geometry cache shared across irreps ============
 
 """
     ProjBlockData
 
-单个 (rep, lam) 块在一个不可约表示 Γ 下的投影数据。
-X 矩阵大小为 (n_states × n_r)，row_indices 是这些 states 在统一基中的行号。
+Projection data for one (rep, lam) block in irrep Γ.
+X The X matrix has size (n_states × n_r)，row_indices row_indices are the indices of these states in the unified basis.
 """
 struct ProjBlockData
     X::Matrix{ComplexF64}
@@ -28,16 +63,15 @@ end
 """
     SubBasisData
 
-一个 (channel, subchannel) 的统一基数据:
-- states / state_to_idx: 该子道在所有不可约表示中出现的全部 (n_tuple, lambda_tuple) 态的并集
-- per_spin, per_mass, kinetic_type: 每粒子自旋/质量/色散关系
-- rot_coeffs: 预计算的旋转系数 (每个态一个向量)
-- proj_by_irrep: 每个不可约表示 → ProjBlockData 列表
+Unified-basis data for one (channel, subchannel):
+- states / state_to_idx: union of all (n_tuple, lambda_tuple) states appearing in all irreps
+- per_spin, per_mass, kinetic_type: per-particle spin/mass/dispersion
+- rot_coeffs: precomputed rotation coefficients (one vector per state)
+- proj_by_irrep: each irrep → ProjBlockData list
 """
 struct SubBasisData
     kappa
     r_val::Int
-    a_val::Int       # vestigial, always 1 since sub-channels no longer split by irrep column
     dim_kappa::Int
     states::Vector
     state_to_idx::Dict
@@ -51,35 +85,64 @@ end
 """
     SystemBasis <: Any
 
-FockSystem 的几何缓存。包含所有不可约表示共享的态列表、旋转系数、
-以及每个不可约表示的投影矩阵。与 V_func/params 无关，只需在 (L,a,Ncut) 变化时重建。
+Geometry cache for a FockSystem. It contains state lists and rotation coefficients shared by all irreps,
+as well as projection matrices for each irrep. It is independent of V_func/params and need only be rebuilt when (L,a,Ncut) changes.
 
-构建后调用 build_V_hel_blocks! 填入相互作用矩阵，然后用 project_and_diag 逐不可约表示求本征值。
+After construction, call build_V_hel_blocks! to fill interaction matrices, then use project_and_diag to solve eigenvalues irrep by irrep.
 """
 mutable struct SystemBasis
     sys::FockSystem
     L_phys::Float64
     chan_sub_data::Vector{Vector{SubBasisData}}
     irrep_total_dim::Dict{String, Int}
-    # V_hel 缓存: (α, sα, β, sβ) → Matrix{ComplexF64}
-    V_hel_blocks::Dict{Tuple{Int,Int,Int,Int}, Matrix{ComplexF64}}
+    # V_hel cache: (α, sα, β, sβ) → AbstractMatrix{ComplexF64}
+    V_hel_blocks::Dict{Tuple{Int,Int,Int,Int}, AbstractMatrix{ComplexF64}}
+end
+
+function Base.show(io::IO, basis::SystemBasis)
+    sys = basis.sys
+    n_ch = length(sys.channels)
+    chan_names = [ch.name for ch in sys.channels]
+
+    # States per channel
+    chan_nstates = Int[]
+    for (α, sd_list) in enumerate(basis.chan_sub_data)
+        total = sum(length(sd.states) for sd in sd_list; init=0)
+        push!(chan_nstates, total)
+    end
+
+    println(io, "SystemBasis:")
+    println(io, "  d=$(sys.d), I=$(sys.I), L=$(sys.L), a=$(sys.a)")
+    print(io,   "  channels: ")
+    for α in 1:n_ch
+        print(io, "$(chan_names[α])=$(chan_nstates[α])")
+        α < n_ch && print(io, ", ")
+    end
+    print(io, " states")
+    has_V = !isempty(basis.V_hel_blocks)
+    has_V && print(io, " [V_hel filled]")
+    println(io)
+    if !isempty(basis.irrep_total_dim)
+        println(io, "  irrep dims: ", basis.irrep_total_dim)
+    end
 end
 
 """
     SystemBasis(sys::FockSystem) -> SystemBasis
 
-从 FockSystem 构建几何缓存。收集各道各子道在所有不可约表示下的统一态基，
-预计算旋转系数和各不可约表示的投影矩阵。
+Build the geometry cache from FockSystem. Collect unified state bases for every channel and subchannel across all irreps,
+and precompute rotation coefficients and projection matrices for each irrep.
 """
-function SystemBasis(sys::FockSystem)
+function SystemBasis(sys::FockSystem;
+                     exclude_subchannels::AbstractVector{SubchannelExclusion}=SubchannelExclusion[])
     L_phys = Float64(sys.L) * sys.a
     n_ch = length(sys.channels)
 
-    # 运动系暂仅支持 N ≤ 2
+    # Moving frames currently support only N ≤ 2
     if sys.d != D000
         for ch in sys.channels
             ch.N > 2 && throw(ArgumentError(
-                "运动系 (d≠0) 暂仅支持 N≤2 的道，道 \"$(ch.name)\" N=$(ch.N)"))
+                "moving frames (d≠0) currently support only channels with N≤2; channel \"$(ch.name)\" has N=$(ch.N)"))
         end
     end
 
@@ -93,13 +156,13 @@ function SystemBasis(sys::FockSystem)
         per_spin_v = Rational{Int}.(per_spin_raw)
         etas_v = Float64.(per_etas_arr)
         multi = length(ch.species) > 1
-        per_mass = _expand_per_particle_mass(ch)
+        per_mass = has_dynamic_mass(ch) ? Float64[] : _expand_per_particle_mass(ch)
 
-        subs = get_isospin_subchannels(ch, sys.I)
+        subs = _active_subchannels(ch, sys.I, exclude_subchannels)
         sub_list = Vector{SubBasisData}(undef, length(subs))
 
         for (si, sub) in enumerate(subs)
-            # 1) 收集所有不可约表示的所有态 (并集)
+            # 1) Collect all states from all irreps (union).
             ST = Tuple{NTuple{ch.N, Momentum}, NTuple{ch.N, Float64}}
             all_states = Vector{ST}()
             state_to_idx = Dict{ST, Int}()
@@ -120,10 +183,10 @@ function SystemBasis(sys::FockSystem)
                 end
             end
 
-            # 2) 预计算旋转系数
+            # 2) Precompute rotation coefficients.
             rot_coeffs = [get_rotation_vector(n, lam, per_spin_v) for (n, lam) in all_states]
 
-            # 3) 为每个不可约表示收集投影块
+            # 3) Collect projection blocks for each irrep.
             proj_by_irrep = Dict{String, Vector{ProjBlockData}}()
             for Gamma in sys.selected_irreps
                 projs = if multi
@@ -143,7 +206,7 @@ function SystemBasis(sys::FockSystem)
                 proj_by_irrep[Gamma] = blocks
             end
 
-            sub_list[si] = SubBasisData(sub.κ, sub.r, sub.a, sub.dim,
+            sub_list[si] = SubBasisData(sub.κ, sub.r, sub.dim,
                                         all_states, state_to_idx, per_spin_v,
                                         per_mass, ch.kinetic_type, rot_coeffs, proj_by_irrep)
         end
@@ -152,24 +215,44 @@ function SystemBasis(sys::FockSystem)
     end
 
     return SystemBasis(sys, L_phys, chan_sub_data, irrep_total_dim,
-                       Dict{Tuple{Int,Int,Int,Int}, Matrix{ComplexF64}}())
+                       Dict{Tuple{Int,Int,Int,Int}, AbstractMatrix{ComplexF64}}())
+end
+
+function _resolve_basis_masses!(basis::SystemBasis, params)
+    for (channel_index, ch) in enumerate(basis.sys.channels)
+        has_dynamic_mass(ch) || continue
+        resolved = resolve_particle_masses(ch, params)
+        for subbasis in basis.chan_sub_data[channel_index]
+            empty!(subbasis.per_mass)
+            append!(subbasis.per_mass, resolved)
+        end
+    end
+    return basis
 end
 
 """
     build_V_hel_blocks!(basis::SystemBasis, V_func, params) -> SystemBasis
 
-为 SystemBasis 中所有 (sub_α, sub_β) 道对构建完整的 V_hel 矩阵（在统一态基中），
-存入 basis.V_hel_blocks。所有不可约表示共享这些矩阵，后续只需做投影。
+Build complete V_hel matrices in unified state bases for every (sub_α, sub_β) channel-pair
+and store them in basis.V_hel_blocks。All irreps share these matrices; only projection is required afterwards.
 
-仅需在 V_func 或 params 变化时重新调用。basis（几何缓存）不变时保留复用。
+Call again only when V_func or params changes. Reuse the basis (geometry cache) unchanged.
 """
 function build_V_hel_blocks!(basis::SystemBasis, V_func::Function, params;
                              V_basis::Symbol=:canonical,
-                             V_filter=nothing)
+                             channel_filter=nothing,
+                             entry_filter=nothing,
+                             validate_hermitian::Bool=false,
+                             validation_blocks::Int=3,
+                             validation_rtol::Float64=1e-10,
+                             validation_atol::Float64=1e-12,
+                             _resolve_masses::Bool=true)
+    _resolve_masses && _resolve_basis_masses!(basis, params)
     empty!(basis.V_hel_blocks)
+    validation_blocks >= 0 || throw(ArgumentError("validation_blocks must be nonnegative"))
     n_ch = length(basis.sys.channels)
 
-    # 收集所有 (子道对) 工作项
+    # Collect all subchannel-pair work items.
     tasks = Tuple{Int,Int,SubBasisData,Int,Int,SubBasisData}[]
     for α in 1:n_ch
         ch_α = basis.sys.channels[α]
@@ -181,52 +264,102 @@ function build_V_hel_blocks!(basis::SystemBasis, V_func::Function, params;
                 sub_data_β = basis.chan_sub_data[β]
                 for (sβ, sd_β) in enumerate(sub_data_β)
                     length(sd_β.states) == 0 && continue
+                    (α, sα) > (β, sβ) && continue
                     push!(tasks, (α, sα, sd_α, β, sβ, sd_β))
                 end
             end
         end
     end
 
-    # 串行调度各道对，并行在 build_V_hel / build_V_hel_direct 内部
+    # Schedule channel pairs serially; parallelism is internal to build_V_hel / build_V_hel_direct  .
     n_tasks = length(tasks)
-    results = Vector{Matrix{ComplexF64}}(undef, n_tasks)
+    results = Vector{AbstractMatrix{ComplexF64}}(undef, n_tasks)
     keys    = Vector{Tuple{Int,Int,Int,Int}}(undef, n_tasks)
 
     for i in 1:n_tasks
         α, sα, sd_α, β, sβ, sd_β = tasks[i]
         V_adapted = _V_adapter(V_func, sd_α.kappa, sd_β.kappa,
                                    sd_α.r_val, sd_β.r_val,
-                                   sd_α.a_val, sd_β.a_val,
                                    sd_α.dim_kappa, sd_β.dim_kappa,
                                    α, β, basis.L_phys, params)
-        filter_adapted = if V_filter !== nothing
+        filter_adapted = if entry_filter !== nothing
             (n_α, lam_or_sig_α, n_β, lam_or_sig_β, extra...) ->
-                V_filter(n_α, n_β, lam_or_sig_α, lam_or_sig_β,
-                         sd_α.kappa, sd_β.kappa,
-                         sd_α.r_val, sd_β.r_val,
-                         sd_α.a_val, sd_β.a_val,
-                         α, β, basis.L_phys, params)
+                entry_filter(n_α, n_β, lam_or_sig_α, lam_or_sig_β,
+                             sd_α.kappa, sd_β.kappa,
+                             sd_α.r_val, sd_β.r_val,
+                             α, β, basis.L_phys, params)
         else
             nothing
         end
-        # channel 级哨兵: nA=nothing 仅检查道对是否可跳过
-        if filter_adapted !== nothing && !filter_adapted(nothing, nothing, nothing, nothing)
-            results[i] = Matrix{ComplexF64}(undef, 0, 0)
+        if channel_filter !== nothing && !Bool(channel_filter(α, β, params))
+            results[i] = spzeros(ComplexF64, 0, 0)
             keys[i] = (α, sα, β, sβ)
             continue
         end
         results[i] = if V_basis == :helicity
             build_V_hel_direct(sd_α.states, sd_β.states, V_adapted;
-                               V_filter=filter_adapted)
+                               entry_filter=filter_adapted)
         else
             build_V_hel(sd_α.states, sd_β.states,
                         sd_α.per_spin, sd_β.per_spin, V_adapted;
-                        V_filter=filter_adapted)
+                        entry_filter=filter_adapted)
         end
         keys[i] = (α, sα, β, sβ)
     end
 
-    # 串行填入字典（避免并发写 Dict）
+    # Optional debugging check: first validate filter exchange symmetry independently, then validate unfiltered V.
+    if validate_hermitian
+        n_checked = 0
+        for i in 1:n_tasks
+            n_checked >= validation_blocks && break
+            α, sα, sd_α, β, sβ, sd_β = tasks[i]
+            channel_filter === nothing ||
+                _validate_channel_filter_hermiticity(
+                    channel_filter, α, β, params)
+            entry_filter === nothing ||
+                _validate_entry_filter_hermiticity(
+                    entry_filter, sd_α, sd_β, α, β,
+                    basis.L_phys, params, V_basis)
+
+            V_forward = _V_adapter(V_func, sd_α.kappa, sd_β.kappa,
+                                   sd_α.r_val, sd_β.r_val,
+                                   sd_α.dim_kappa, sd_β.dim_kappa,
+                                   α, β, basis.L_phys, params)
+            forward = if channel_filter === nothing && entry_filter === nothing
+                results[i]
+            elseif V_basis == :helicity
+                build_V_hel_direct(sd_α.states, sd_β.states, V_forward)
+            else
+                build_V_hel(sd_α.states, sd_β.states,
+                            sd_α.per_spin, sd_β.per_spin, V_forward)
+            end
+
+            if (α, sα) == (β, sβ)
+                isapprox(forward, adjoint(forward);
+                         rtol=validation_rtol, atol=validation_atol) ||
+                    throw(ArgumentError("interaction is not Hermitian in block ($α,$sα)"))
+            else
+                V_reverse = _V_adapter(V_func, sd_β.kappa, sd_α.kappa,
+                                       sd_β.r_val, sd_α.r_val,
+                                       sd_β.dim_kappa, sd_α.dim_kappa,
+                                       β, α, basis.L_phys, params)
+                reverse = if V_basis == :helicity
+                    build_V_hel_direct(sd_β.states, sd_α.states, V_reverse)
+                else
+                    build_V_hel(sd_β.states, sd_α.states,
+                                sd_β.per_spin, sd_α.per_spin, V_reverse)
+                end
+                isapprox(reverse, adjoint(forward);
+                         rtol=validation_rtol, atol=validation_atol) ||
+                    throw(ArgumentError(
+                        "interaction violates Hermiticity between blocks " *
+                        "($α,$sα) and ($β,$sβ)"))
+            end
+            n_checked += 1
+        end
+    end
+
+    # Fill the dictionary serially (avoid concurrent Dict writes).
     for i in 1:n_tasks
         basis.V_hel_blocks[keys[i]] = results[i]
     end
@@ -234,12 +367,65 @@ function build_V_hel_blocks!(basis::SystemBasis, V_func::Function, params;
     return basis
 end
 
-# ============ 优化管道: irrep 投影 + 本征值 ============
+function _validate_channel_filter_hermiticity(channel_filter,
+                                              α::Int, β::Int, params)
+    fwd = Bool(channel_filter(α, β, params))
+    rev = Bool(channel_filter(β, α, params))
+    fwd == rev || throw(ArgumentError(
+        "channel_filter violates exchange symmetry for channels $α ↔ $β"))
+    return nothing
+end
+
+function _validate_entry_filter_hermiticity(entry_filter, sd_α::SubBasisData,
+                                            sd_β::SubBasisData, α::Int, β::Int,
+                                            L_phys::Float64, params, V_basis::Symbol)
+    inputs_α = if V_basis == :helicity
+        sd_α.states
+    else
+        momenta = unique(first.(sd_α.states))
+        sigmas = _σ_configurations(sd_α.per_spin)
+        [(n, σ) for n in momenta for σ in sigmas]
+    end
+    inputs_β = if V_basis == :helicity
+        sd_β.states
+    else
+        momenta = unique(first.(sd_β.states))
+        sigmas = _σ_configurations(sd_β.per_spin)
+        [(n, σ) for n in momenta for σ in sigmas]
+    end
+
+    for (nA, qA) in inputs_α, (nB, qB) in inputs_β
+        fwd = Bool(entry_filter(nA, nB, qA, qB,
+                                sd_α.kappa, sd_β.kappa,
+                                sd_α.r_val, sd_β.r_val,
+                                α, β, L_phys, params))
+        rev = Bool(entry_filter(nB, nA, qB, qA,
+                                sd_β.kappa, sd_α.kappa,
+                                sd_β.r_val, sd_α.r_val,
+                                β, α, L_phys, params))
+        fwd == rev || throw(ArgumentError(
+            "entry_filter violates exchange symmetry between blocks " *
+            "($α,$(sd_α.r_val)) and ($β,$(sd_β.r_val))"))
+    end
+    return nothing
+end
+
+@inline function _get_V_hel_block(basis::SystemBasis,
+                                  α::Int, sα::Int, β::Int, sβ::Int)
+    V = get(basis.V_hel_blocks, (α, sα, β, sβ), nothing)
+    if V === nothing
+        reverse = get(basis.V_hel_blocks, (β, sβ, α, sα), nothing)
+        reverse === nothing || return adjoint(reverse)
+    end
+    return V
+end
+
+# ============ Optimized pipeline: irrep projection + eigenvalues ============
 
 """
     _assemble_irrep_hamiltonian(basis::SystemBasis, Gamma::String) -> Matrix{ComplexF64}
 
-从 SystemBasis 的 V_hel_blocks 和投影矩阵，组装指定不可约表示 Γ 的完整投影哈密顿量矩阵。
+Assemble the complete projected Hamiltonian matrix for irrep Γ from SystemBasis V_hel_blocks and projection matrices.
 """
 function _assemble_irrep_hamiltonian(basis::SystemBasis, Gamma::String)
     dim = basis.irrep_total_dim[Gamma]
@@ -270,38 +456,51 @@ function _assemble_irrep_hamiltonian(basis::SystemBasis, Gamma::String)
                         col_start += 0  # no contribution, advance nothing
                         continue
                     end
+                    if (α, sα) > (β, sβ)
+                        col_start += n_r_β
+                        continue
+                    end
                     # n_r_β > 0: advance col_start after processing
 
-                    V_hel = get(basis.V_hel_blocks, (α, sα, β, sβ), nothing)
+                    V_hel = _get_V_hel_block(basis, α, sα, β, sβ)
 
                     if V_hel !== nothing && size(V_hel, 1) > 0 && size(V_hel, 2) > 0
-                        # 有限体积因子
+                        # Finite-volume factor
                         N_α_val = length(first(sd_α.states)[1])
                         N_β_val = length(first(sd_β.states)[1])
                         d_val = 3 * (N_α_val + N_β_val) - 6
                         fv = (2π * ħc / L_phys)^(d_val / 2)
 
-                        # 投影 V_hel:  每个 (blk_α, blk_β) 块对
+                        # Project V_hel: each (blk_α, blk_β) block pair
                         row_off = 1
-                        for blk_α in blocks_α
+                        for (i_blk_α, blk_α) in enumerate(blocks_α)
                             col_off = 1
-                            for blk_β in blocks_β
-                                V_sub = V_hel[blk_α.row_indices, blk_β.row_indices]
-                                V_proj = fv * blk_α.X' * V_sub * blk_β.X
+                            for (i_blk_β, blk_β) in enumerate(blocks_β)
+                                if (α, sα) == (β, sβ) &&
+                                   i_blk_α > i_blk_β
+                                    col_off += blk_β.n_r
+                                    continue
+                                end
+                                V_sub = view(V_hel, blk_α.row_indices, blk_β.row_indices)
+                                tmp = V_sub * blk_β.X
+                                V_proj = fv * (blk_α.X' * tmp)
                                 r_rng = row_start + row_off - 1 : row_start + row_off + blk_α.n_r - 2
                                 c_rng = col_start + col_off - 1 : col_start + col_off + blk_β.n_r - 2
                                 H[r_rng, c_rng] .+= V_proj
+                                if r_rng != c_rng
+                                    H[c_rng, r_rng] .+= adjoint(V_proj)
+                                end
                                 col_off += blk_β.n_r
                             end
                             row_off += blk_α.n_r
                         end
                     end
 
-                    # 动能对角项 (仅道对角 + 子道对角)
+                    # Kinetic-energy diagonal term (channel- and subchannel-diagonal only).
                     if α == β && sα == sβ
                         T_off = 1
                         for blk_α in blocks_α
-                            n_tuple = sd_α.states[blk_α.row_indices[1]][1]
+                            n_tuple = sd_α.states[(blk_α.row_indices[1]-1) ÷ sd_α.dim_kappa + 1][1]
                             T_rep = _kinetic_energy_rep(n_tuple, sd_α.per_mass,
                                                         L_phys, sd_α.kinetic_type; d=basis.sys.d)
                             r_rng = row_start + T_off - 1 : row_start + T_off + blk_α.n_r - 2
@@ -322,27 +521,89 @@ function _assemble_irrep_hamiltonian(basis::SystemBasis, Gamma::String)
     return H
 end
 
-# ============ 稀疏线性算子 + eigs ============
+# ============ Channel-decomposition utilities ============
 
 """
-    _VBlock — 单个投影 V 块的存储
+    _channel_row_ranges(basis::SystemBasis, Gamma::String) -> Vector{UnitRange{Int}}
 
-mat 为 fv * X_α' * V_sub * X_β，维度 n_r_α × n_r_β。
+Return the row-index range of each channel in the H matrix for irrep Γ.
+Traversal order is identical to `_assemble_irrep_hamiltonian`.
+"""
+function _channel_row_ranges(basis::SystemBasis, Gamma::String)
+    n_ch = length(basis.sys.channels)
+    ranges = Vector{UnitRange{Int}}(undef, n_ch)
+    dim = basis.irrep_total_dim[Gamma]
+
+    if dim == 0
+        for α in 1:n_ch
+            ranges[α] = 1:0
+        end
+        return ranges
+    end
+
+    row_start = 1
+    for α in 1:n_ch
+        chan_start = row_start
+        for sd_α in basis.chan_sub_data[α]
+            blocks = sd_α.proj_by_irrep[Gamma]
+            n_r = sum(b.n_r for b in blocks; init=0)
+            row_start += n_r
+        end
+        ranges[α] = row_start > chan_start ? (chan_start:row_start-1) : (1:0)
+    end
+    return ranges
+end
+
+"""
+    channel_decomposition(basis::SystemBasis, Gamma::String, evecs::Matrix{ComplexF64})
+        -> Vector{Dict{String, Float64}}
+
+For the eigenvector matrix of irrep Γ (one eigenvector per column), compute the |v|² fraction of each channel.
+Return a vector of length size(evecs,2), whose entries are Dict(channel_name => fraction).
+"""
+function channel_decomposition(basis::SystemBasis, Gamma::String, evecs::Matrix{ComplexF64})
+    ranges = _channel_row_ranges(basis, Gamma)
+    chan_names = [ch.name for ch in basis.sys.channels]
+    n_ev = size(evecs, 2)
+    result = Vector{Dict{String, Float64}}(undef, n_ev)
+
+    for j in 1:n_ev
+        v = evecs[:, j]
+        total = sum(abs2, v)
+        total == 0.0 && (total = 1.0)
+        fracs = Dict{String, Float64}()
+        for (α, rng) in enumerate(ranges)
+            isempty(rng) && continue
+            fracs[chan_names[α]] = round(sum(abs2, v[rng]) / total, digits=4)
+        end
+        result[j] = fracs
+    end
+    return result
+end
+
+# ============ Sparse linear operator + eigs ============
+
+"""
+    _VBlock — Storage for one projected V block
+
+mat is fv * X_α' * V_sub * X_β，with size n_r_α × n_r_β。
 """
 struct _VBlock
     r_rng::UnitRange{Int}
     c_rng::UnitRange{Int}
     mat::Matrix{ComplexF64}
+    add_adjoint::Bool
 end
 
 """
     _build_hamiltonian_operator(basis, Gamma) -> (T_diag, v_blocks)
 
-从 SystemBasis 构建哈密顿量线性算子表示。
-返回动能对角向量 T_diag 和 V_proj 块列表，替代稠密 H 矩阵 (dim×dim)。
-遍历逻辑与 _assemble_irrep_hamiltonian 完全一致，仅输出形式不同。
+Construct a Hamiltonian linear-operator representation from SystemBasis.
+Return kinetic diagonal vector T_diag and projected V-block list, replacing the dense H matrix (dim×dim).
+Traversal logic is identical to _assemble_irrep_hamiltonian; only the output representation differs.
 """
-function _build_hamiltonian_operator(basis::SystemBasis, Gamma::String)
+function _build_hamiltonian_operator(basis::SystemBasis, Gamma::String;
+                                     include_kinetic::Bool=true)
     dim = basis.irrep_total_dim[Gamma]
     dim == 0 && return Float64[], _VBlock[]
 
@@ -366,8 +627,12 @@ function _build_hamiltonian_operator(basis::SystemBasis, Gamma::String)
                     blocks_β = sd_β.proj_by_irrep[Gamma]
                     n_r_β = sum(b.n_r for b in blocks_β; init=0)
                     n_r_β == 0 && continue
+                    if (α, sα) > (β, sβ)
+                        col_start += n_r_β
+                        continue
+                    end
 
-                    V_hel = get(basis.V_hel_blocks, (α, sα, β, sβ), nothing)
+                    V_hel = _get_V_hel_block(basis, α, sα, β, sβ)
 
                     if V_hel !== nothing && size(V_hel, 1) > 0 && size(V_hel, 2) > 0
                         N_α_val = length(first(sd_α.states)[1])
@@ -376,15 +641,22 @@ function _build_hamiltonian_operator(basis::SystemBasis, Gamma::String)
                         fv = (2π * ħc / L_phys)^(d_val / 2)
 
                         row_off = 1
-                        for blk_α in blocks_α
+                        for (i_blk_α, blk_α) in enumerate(blocks_α)
                             col_off = 1
-                            for blk_β in blocks_β
-                                V_sub = V_hel[blk_α.row_indices, blk_β.row_indices]
-                                V_proj = fv * blk_α.X' * V_sub * blk_β.X
+                            for (i_blk_β, blk_β) in enumerate(blocks_β)
+                                if (α, sα) == (β, sβ) &&
+                                   i_blk_α > i_blk_β
+                                    col_off += blk_β.n_r
+                                    continue
+                                end
+                                V_sub = view(V_hel, blk_α.row_indices, blk_β.row_indices)
+                                tmp = V_sub * blk_β.X
+                                V_proj = fv * (blk_α.X' * tmp)
                                 if !all(iszero, V_proj)
                                     r_rng = row_start+row_off-1 : row_start+row_off+blk_α.n_r-2
                                     c_rng = col_start+col_off-1 : col_start+col_off+blk_β.n_r-2
-                                    push!(v_blocks, _VBlock(r_rng, c_rng, V_proj))
+                                    push!(v_blocks, _VBlock(
+                                        r_rng, c_rng, V_proj, r_rng != c_rng))
                                 end
                                 col_off += blk_β.n_r
                             end
@@ -392,10 +664,10 @@ function _build_hamiltonian_operator(basis::SystemBasis, Gamma::String)
                         end
                     end
 
-                    if α == β && sα == sβ
+                    if include_kinetic && α == β && sα == sβ
                         T_off = 1
                         for blk_α in blocks_α
-                            n_tuple = sd_α.states[blk_α.row_indices[1]][1]
+                            n_tuple = sd_α.states[(blk_α.row_indices[1]-1) ÷ sd_α.dim_kappa + 1][1]
                             T_rep = _kinetic_energy_rep(n_tuple, sd_α.per_mass,
                                                         L_phys, sd_α.kinetic_type; d=basis.sys.d)
                             r_rng = row_start+T_off-1 : row_start+T_off+blk_α.n_r-2
@@ -410,37 +682,203 @@ function _build_hamiltonian_operator(basis::SystemBasis, Gamma::String)
             row_start += n_r_α
         end
     end
-
     return T_diag, v_blocks
 end
+
 
 """
     _H_matvec(x, T_diag, v_blocks) -> y
 
-线性算子 y = H * x，无需存储稠密 H 矩阵。
-遍历所有 V 块: y[r_rng] += V_proj * x[c_rng]，加上动能对角贡献。
+Linear operator y = H * x, without storing dense H.
+Traverse all V blocks: y[r_rng] += V_proj * x[c_rng]，then add the kinetic diagonal contribution.
 """
 function _H_matvec(x::AbstractVector{<:ComplexF64}, T_diag::Vector{Float64},
                    v_blocks::Vector{_VBlock})
     y = T_diag .* x
     for vb in v_blocks
-        y[vb.r_rng] .+= vb.mat * x[vb.c_rng]
+        mul!(view(y, vb.r_rng), vb.mat, view(x, vb.c_rng), true, true)
+        if vb.add_adjoint
+            mul!(view(y, vb.c_rng), adjoint(vb.mat),
+                 view(x, vb.r_rng), true, true)
+        end
     end
     return y
+end
+
+# ============ Truly factorized Q† V_hel Q operator ============
+
+struct _ProjectionApplyBlock
+    X::Matrix{ComplexF64}
+    row_indices::Vector{Int}
+    projected_range::UnitRange{Int}
+end
+
+struct _ProjectionPlan
+    blocks::Vector{_ProjectionApplyBlock}
+    unified_dim::Int
+end
+
+struct _FactorizedInteractionBlock
+    left_plan::Int
+    right_plan::Int
+    mat::AbstractMatrix{ComplexF64}
+    fv::Float64
+    add_adjoint::Bool
+end
+
+mutable struct _FactorizedHamiltonianOperator
+    T_diag::Vector{Float64}
+    plans::Vector{_ProjectionPlan}
+    interactions::Vector{_FactorizedInteractionBlock}
+    u::Vector{Vector{ComplexF64}}
+    z::Vector{Vector{ComplexF64}}
+end
+
+function _apply_Q!(u::Vector{ComplexF64}, plan::_ProjectionPlan,
+                   x::AbstractVector{<:ComplexF64})
+    fill!(u, 0)
+    for block in plan.blocks
+        X = block.X
+        rows = block.row_indices
+        cols = block.projected_range
+        @inbounds for j in axes(X, 2)
+            xj = x[cols[j]]
+            iszero(xj) && continue
+            for i in axes(X, 1)
+                u[rows[i]] += X[i, j] * xj
+            end
+        end
+    end
+    return u
+end
+
+function _apply_Qadj_add!(y::Vector{ComplexF64}, plan::_ProjectionPlan,
+                          z::Vector{ComplexF64})
+    for block in plan.blocks
+        X = block.X
+        rows = block.row_indices
+        cols = block.projected_range
+        @inbounds for j in axes(X, 2)
+            acc = zero(ComplexF64)
+            for i in axes(X, 1)
+                acc += conj(X[i, j]) * z[rows[i]]
+            end
+            y[cols[j]] += acc
+        end
+    end
+    return y
+end
+
+function LinearAlgebra.mul!(y::Vector{ComplexF64},
+                            H::_FactorizedHamiltonianOperator,
+                            x::AbstractVector{<:ComplexF64})
+    length(y) == length(H.T_diag) == length(x) || throw(DimensionMismatch())
+    @. y = H.T_diag * x
+
+    for (u, plan) in zip(H.u, H.plans)
+        _apply_Q!(u, plan, x)
+    end
+    for z in H.z
+        fill!(z, 0)
+    end
+
+    for block in H.interactions
+        mul!(H.z[block.left_plan], block.mat, H.u[block.right_plan],
+             block.fv, true)
+        if block.add_adjoint
+            mul!(H.z[block.right_plan], adjoint(block.mat),
+                 H.u[block.left_plan], block.fv, true)
+        end
+    end
+
+    for (z, plan) in zip(H.z, H.plans)
+        _apply_Qadj_add!(y, plan, z)
+    end
+    return y
+end
+
+function (H::_FactorizedHamiltonianOperator)(x::AbstractVector{<:ComplexF64})
+    y = similar(x, ComplexF64, length(H.T_diag))
+    return mul!(y, H, x)
+end
+
+function _build_factorized_hamiltonian_operator(basis::SystemBasis, Gamma::String)
+    dim = basis.irrep_total_dim[Gamma]
+    dim == 0 && return _FactorizedHamiltonianOperator(
+        Float64[], _ProjectionPlan[], _FactorizedInteractionBlock[],
+        Vector{ComplexF64}[], Vector{ComplexF64}[])
+
+    plans = _ProjectionPlan[]
+    plan_index = Dict{Tuple{Int,Int},Int}()
+    T_diag = zeros(Float64, dim)
+    projected_start = 1
+
+    for α in eachindex(basis.chan_sub_data)
+        for (sα, sd) in enumerate(basis.chan_sub_data[α])
+            blocks = sd.proj_by_irrep[Gamma]
+            n_r = sum(b.n_r for b in blocks; init=0)
+            n_r == 0 && continue
+
+            apply_blocks = _ProjectionApplyBlock[]
+            local_start = projected_start
+            for block in blocks
+                rng = local_start:local_start + block.n_r - 1
+                push!(apply_blocks, _ProjectionApplyBlock(
+                    block.X, block.row_indices, rng))
+
+                n_tuple = sd.states[
+                    (block.row_indices[1] - 1) ÷ sd.dim_kappa + 1][1]
+                T_rep = _kinetic_energy_rep(
+                    n_tuple, sd.per_mass, basis.L_phys, sd.kinetic_type;
+                    d=basis.sys.d)
+                T_diag[rng] .= T_rep
+                local_start += block.n_r
+            end
+
+            unified_dim = length(sd.states) * sd.dim_kappa
+            push!(plans, _ProjectionPlan(apply_blocks, unified_dim))
+            plan_index[(α, sα)] = length(plans)
+            projected_start += n_r
+        end
+    end
+    projected_start == dim + 1 || error("factorized projected layout mismatch")
+
+    interactions = _FactorizedInteractionBlock[]
+    for (key, V_hel) in basis.V_hel_blocks
+        α, sα, β, sβ = key
+        left = get(plan_index, (α, sα), 0)
+        right = get(plan_index, (β, sβ), 0)
+        (left == 0 || right == 0 || isempty(V_hel)) && continue
+
+        sd_α = basis.chan_sub_data[α][sα]
+        sd_β = basis.chan_sub_data[β][sβ]
+        N_α = length(first(sd_α.states)[1])
+        N_β = length(first(sd_β.states)[1])
+        exponent = (3 * (N_α + N_β) - 6) / 2
+        fv = (2π * ħc / basis.L_phys)^exponent
+        push!(interactions, _FactorizedInteractionBlock(
+            left, right, V_hel, fv, left != right))
+    end
+
+    u = [zeros(ComplexF64, p.unified_dim) for p in plans]
+    z = [zeros(ComplexF64, p.unified_dim) for p in plans]
+    return _FactorizedHamiltonianOperator(T_diag, plans, interactions, u, z)
 end
 
 """
     compute_spectrum_eigs(basis::SystemBasis; n_levels=20, tol=1e-8)
         -> Dict{String, Vector{Float64}}
 
-使用稀疏线性算子 + KrylovKit.eigsolve 计算各不可约表示的最低 n_levels 个本征值。
+Use a sparse linear operator plus KrylovKit.eigsolve to compute the lowest n_levels eigenvalues of each irrep.
 
-不构造稠密 dim×dim 哈密顿量矩阵，适用于大维度系统（>5000）。
+Do not construct a dense dim×dim Hamiltonian matrix; suitable for large systems (>5000).
 """
 function compute_spectrum_eigs(basis::SystemBasis;
                                 n_levels::Union{Int, Dict{String, Int}} = 20,
-                                tol::Float64 = 1e-8)
+                                tol::Float64 = 1e-8,
+                                return_vectors::Bool = false)
     result = Dict{String, Vector{Float64}}()
+    vecs   = Dict{String, Matrix{ComplexF64}}()
     for Gamma in basis.sys.selected_irreps
         dim = basis.irrep_total_dim[Gamma]
         dim == 0 && continue
@@ -449,41 +887,204 @@ function compute_spectrum_eigs(basis::SystemBasis;
         T_diag, v_blocks = _build_hamiltonian_operator(basis, Gamma)
 
         if isempty(v_blocks)
-            result[Gamma] = sort(T_diag)[1:min(n_g, dim)]
+            ev = sort(T_diag)[1:min(n_g, dim)]
+            result[Gamma] = ev
+            if return_vectors
+                vecs[Gamma] = Matrix(Diagonal(ones(ComplexF64, length(ev))))
+            end
             continue
         end
 
         n_ev = min(n_g, dim)
         H_op = x -> _H_matvec(x, T_diag, v_blocks)
 
-        evals, _, info = eigsolve(
-            H_op, randn(ComplexF64, dim), n_ev, :SR,
-            Arnoldi(; tol=tol, maxiter=max(200, dim ÷ 5))
+        evals_raw, evecs_raw, info = eigsolve(
+            H_op, _deterministic_krylov_start(dim), n_ev, :SR,
+            Lanczos(; tol=tol, krylovdim=max(20, 3n_ev + 8), maxiter=200)
         )
         info.converged < n_ev &&
-            @warn "KrylovKit 仅收敛 $(info.converged)/$n_ev 个本征值 (Γ=$Gamma)"
+            @warn "KrylovKit converged for only $(info.converged)/$n_ev eigenvalues (Γ=$Gamma)"
 
-        ev = sort(real.(evals))[1:min(length(evals), n_ev)]
+        # Sort by real part and reorder eigenvectors consistently.
+        perm = sortperm(real.(evals_raw))
+        n_out = min(length(evals_raw), n_ev)
+        ev = real.(evals_raw[perm][1:n_out])
 
         if basis.sys.d != D000
             P_mag = (2π * ħc / basis.L_phys) * sqrt(Float64(sum(abs2, basis.sys.d)))
             ev = [sqrt(E^2 + P_mag^2) for E in ev]
         end
         result[Gamma] = ev
+
+        if return_vectors
+            V = reduce(hcat, evecs_raw[perm][1:n_out])
+            vecs[Gamma] = V
+        end
     end
-    return result
+    return return_vectors ? (result, vecs) : result
+end
+
+
+"""
+    _compute_spectrum_preprojected(basis, interactions; n_levels, backend,
+                                   return_vectors=false)
+
+Solve a Hamiltonian whose interaction has already been projected into the
+irrep basis. This is the evaluation path used by `prepare_affine`: only the
+kinetic diagonal is rebuilt for the current masses.
+"""
+function _compute_spectrum_preprojected(
+        basis::SystemBasis,
+        interactions::Dict{String, Vector{_VBlock}};
+        n_levels::Union{Nothing, Int, Dict{String, Int}}=20,
+        backend::Symbol=:projected_blocks,
+        return_vectors::Bool=false)
+    result = Dict{String, Vector{Float64}}()
+    vecs = Dict{String, Matrix{ComplexF64}}()
+
+    for Gamma in basis.sys.selected_irreps
+        dim = basis.irrep_total_dim[Gamma]
+        dim == 0 && continue
+        n_g = n_levels === nothing ? dim :
+              n_levels isa Int ? n_levels : get(n_levels, Gamma, 20)
+        n_ev = min(n_g, dim)
+
+        T_diag, unused_blocks = _build_hamiltonian_operator(basis, Gamma)
+        isempty(unused_blocks) || error(
+            "affine preprojected evaluation requires empty V_hel_blocks")
+        v_blocks = get(interactions, Gamma, _VBlock[])
+
+        if backend == :complete_matrix
+            H = Matrix{ComplexF64}(Diagonal(complex.(T_diag)))
+            for vb in v_blocks
+                H[vb.r_rng, vb.c_rng] .+= vb.mat
+                vb.add_adjoint && (H[vb.c_rng, vb.r_rng] .+= adjoint(vb.mat))
+            end
+            Hh = Hermitian(H)
+            if return_vectors
+                evals_full, evecs_full = n_ev >= dim ? eigen(Hh) : eigen(Hh, 1:n_ev)
+                perm = sortperm(real.(evals_full))
+                result[Gamma] = real.(evals_full[perm])
+                vecs[Gamma] = evecs_full[:, perm]
+            else
+                result[Gamma] = n_ev >= dim ?
+                    sort(real.(eigvals(Hh))) : sort(real.(eigvals(Hh, 1:n_ev)))
+            end
+            if basis.sys.d != D000
+                P_mag = (2π * ħc / basis.L_phys) *
+                        sqrt(Float64(sum(abs2, basis.sys.d)))
+                result[Gamma] = sqrt.(result[Gamma].^2 .+ P_mag^2)
+            end
+            continue
+        end
+
+        if isempty(v_blocks)
+            perm = sortperm(T_diag)[1:n_ev]
+            result[Gamma] = T_diag[perm]
+            if return_vectors
+                V = zeros(ComplexF64, dim, n_ev)
+                for (j, i) in enumerate(perm)
+                    V[i, j] = 1
+                end
+                vecs[Gamma] = V
+            end
+            if basis.sys.d != D000
+                P_mag = (2π * ħc / basis.L_phys) *
+                        sqrt(Float64(sum(abs2, basis.sys.d)))
+                result[Gamma] = sqrt.(result[Gamma].^2 .+ P_mag^2)
+            end
+            continue
+        end
+
+        H_op = x -> _H_matvec(x, T_diag, v_blocks)
+        evals_raw, evecs_raw, info = eigsolve(
+            H_op, _deterministic_krylov_start(dim), n_ev, :SR,
+            Lanczos(; tol=1e-8, krylovdim=max(20, 3n_ev + 8), maxiter=200))
+        info.converged < n_ev && @warn(
+            "KrylovKit converged for only $(info.converged)/$n_ev eigenvalues (Γ=$Gamma)")
+        perm = sortperm(real.(evals_raw))
+        n_out = min(length(evals_raw), n_ev)
+        result[Gamma] = real.(evals_raw[perm][1:n_out])
+        if basis.sys.d != D000
+            P_mag = (2π * ħc / basis.L_phys) *
+                    sqrt(Float64(sum(abs2, basis.sys.d)))
+            result[Gamma] = sqrt.(result[Gamma].^2 .+ P_mag^2)
+        end
+        if return_vectors
+            vecs[Gamma] = reduce(hcat, evecs_raw[perm][1:n_out])
+        end
+    end
+    return return_vectors ? (result, vecs) : result
+end
+
+function _deterministic_krylov_start(dim::Int)
+    x = ComplexF64[sin(i) + im * cos(sqrt(2.0) * i) for i in 1:dim]
+    return x ./ norm(x)
+end
+
+function compute_spectrum_factorized(
+        basis::SystemBasis;
+        n_levels::Union{Int, Dict{String, Int}}=7,
+        tol::Float64=1e-8,
+        return_vectors::Bool=false)
+    result = Dict{String, Vector{Float64}}()
+    vecs = Dict{String, Matrix{ComplexF64}}()
+
+    for Gamma in basis.sys.selected_irreps
+        dim = basis.irrep_total_dim[Gamma]
+        dim == 0 && continue
+        n_g = n_levels isa Int ? n_levels : get(n_levels, Gamma, 7)
+        n_ev = min(n_g, dim)
+        H_op = _build_factorized_hamiltonian_operator(basis, Gamma)
+
+        if isempty(H_op.interactions)
+            perm = sortperm(H_op.T_diag)[1:n_ev]
+            result[Gamma] = H_op.T_diag[perm]
+            if return_vectors
+                V = zeros(ComplexF64, dim, n_ev)
+                for (j, i) in enumerate(perm)
+                    V[i, j] = 1
+                end
+                vecs[Gamma] = V
+            end
+            continue
+        end
+
+        initial = _deterministic_krylov_start(dim)
+        evals_raw, evecs_raw, info = eigsolve(
+            H_op, initial, n_ev, :SR,
+            Lanczos(; tol=tol, krylovdim=max(20, 3n_ev + 8), maxiter=200))
+        info.converged < n_ev && @warn(
+            "KrylovKit converged for only $(info.converged)/$n_ev eigenvalues (Γ=$Gamma)")
+
+        perm = sortperm(real.(evals_raw))
+        n_out = min(length(evals_raw), n_ev)
+        ev = real.(evals_raw[perm][1:n_out])
+        if basis.sys.d != D000
+            P_mag = (2π * ħc / basis.L_phys) *
+                    sqrt(Float64(sum(abs2, basis.sys.d)))
+            ev = [sqrt(E^2 + P_mag^2) for E in ev]
+        end
+        result[Gamma] = ev
+        if return_vectors
+            vecs[Gamma] = reduce(hcat, evecs_raw[perm][1:n_out])
+        end
+    end
+    return return_vectors ? (result, vecs) : result
 end
 
 """
     compute_spectrum(basis::SystemBasis; n_levels = nothing) -> Dict{String, Vector{Float64}}
 
-从已填充 V_hel 的 SystemBasis 计算各不可约表示的投影哈密顿量本征值（升序）。
+Compute projected-Hamiltonian eigenvalues (ascending) for each irrep from a SystemBasis with filled V_hel.
 
-若提供 `n_levels::Dict{String,Int}`，仅计算每个不可约表示最低的 n_levels[Γ] 个本征值。
+If `n_levels::Dict{String,Int}` is provided, compute only the lowest n_levels[Γ] eigenvalues of each irrep.
 """
 function compute_spectrum(basis::SystemBasis;
-                          n_levels::Union{Nothing, Dict{String, Int}} = nothing)
+                          n_levels::Union{Nothing, Dict{String, Int}} = nothing,
+                          return_vectors::Bool = false)
     result = Dict{String, Vector{Float64}}()
+    vecs   = Dict{String, Matrix{ComplexF64}}()
     for Gamma in basis.sys.selected_irreps
         dim = basis.irrep_total_dim[Gamma]
         dim == 0 && continue
@@ -494,22 +1095,35 @@ function compute_spectrum(basis::SystemBasis;
         else
             min(get(n_levels, Gamma, dim), dim)
         end
-        ev = if n >= dim
-            sort(real.(eigvals(Hermitian(H))))
+        Hh = Hermitian(H)
+        if return_vectors
+            evals_full, evecs_full = n >= dim ? eigen(Hh) : eigen(Hh, 1:n)
+            perm = sortperm(real.(evals_full))
+            ev = real.(evals_full[perm])
+            # Moving-frame boost
+            if basis.sys.d != D000
+                P_mag = (2π * ħc / basis.L_phys) * sqrt(Float64(sum(abs2, basis.sys.d)))
+                ev = [sqrt(E^2 + P_mag^2) for E in ev]
+            end
+            result[Gamma] = ev
+            vecs[Gamma] = evecs_full[:, perm]
         else
-            sort(real.(eigvals(Hermitian(H), 1:n)))
+            ev = if n >= dim
+                sort(real.(eigvals(Hh)))
+            else
+                sort(real.(eigvals(Hh, 1:n)))
+            end
+            if basis.sys.d != D000
+                P_mag = (2π * ħc / basis.L_phys) * sqrt(Float64(sum(abs2, basis.sys.d)))
+                ev = [sqrt(E^2 + P_mag^2) for E in ev]
+            end
+            result[Gamma] = ev
         end
-        # 运动系: 质心系本征值 boost 到运动系
-        if basis.sys.d != D000
-            P_mag = (2π * ħc / basis.L_phys) * sqrt(Float64(sum(abs2, basis.sys.d)))
-            ev = [sqrt(E^2 + P_mag^2) for E in ev]
-        end
-        result[Gamma] = ev
     end
-    return result
+    return return_vectors ? (result, vecs) : result
 end
 
-# ============ 单次投影缓存 ============
+# ============ Single-projection cache ============
 
 function _get_projection(n_tuple::NTuple{N, Momentum},
                          lambda_tuple::NTuple{N, Float64},
@@ -520,8 +1134,12 @@ function _get_projection(n_tuple::NTuple{N, Momentum},
            kappa=kappa, Gamma=Gamma, d=d, spin=spin, etas=Tuple(etas))
     return get!(_PROJ_CACHE, key) do
         st = isinteger(spin) ? :boson : :fermion
+        M = count(iszero, n_tuple)
+        prepared_orbit = M > 0 && spin != 0.0 ? nothing :
+            _get_prepared_projection_orbit(n_tuple, lambda_tuple, d, st)
         res = subspace_projection(n_tuple, lambda_tuple, kappa, Gamma;
-                                  d_total=d, species_type=st, spin=spin, etas=etas)
+                                  d_total=d, species_type=st, spin=spin, etas=etas,
+                                  prepared_orbit=prepared_orbit)
         (X=res.X, states=res.subspace_states, Z=res.Z)
     end
 end
@@ -545,7 +1163,7 @@ function _get_projection(n_tuple::NTuple{N, Momentum},
     end
 end
 
-# ============ 工具函数 ============
+# ============ Utility functions ============
 
 function _expand_per_particle(ch::FockChannel)
     per_spin = Rational{Int}[]
@@ -557,7 +1175,7 @@ function _expand_per_particle(ch::FockChannel)
     return per_spin, per_etas
 end
 
-# ============ 道的代表态投影列表 ============
+# ============ Representative-state projection lists for channels ============
 
 function _get_channel_proj_list(ch::FockChannel, Ncut::Int, d::Momentum,
                                 kappa::String, Gamma::String,
@@ -571,7 +1189,7 @@ function _get_channel_proj_list(ch::FockChannel, Ncut::Int, d::Momentum,
         for rep in reps
             M = count(n -> n == Momentum(0, 0, 0), rep)
             if M > 0 && spin != 0.0
-                # 零动量 + 非零自旋: 对有限动量部分取螺旋度代表
+                # Zero momentum + nonzero spin: use helicity representatives for the finite-momentum part.
                 N_total = length(rep)
                 N_fin = N_total - M
                 if N_fin > 0
@@ -579,7 +1197,7 @@ function _get_channel_proj_list(ch::FockChannel, Ncut::Int, d::Momentum,
                     fin_hels = get_helicity_reps(fin_rep, [N_fin],
                         [ch.particle_types[1]], [ch.spins[1]], d)
                 else
-                    fin_hels = [()]  # 全部粒子零动量
+                    fin_hels = [()]  # All particles have zero momentum.
                 end
                 for fin_lam in fin_hels
                     fin_lam_f = Tuple(Float64.(fin_lam))
@@ -692,36 +1310,36 @@ function _get_channel_proj_list(ch::FockChannel, Ncut::Int, d::Momentum,
     end
 end
 
-# ============ 运动系工具 ============
+# ============ Moving-frame utilities ============
 
 """
     boost_to_cm(p_mov, masses, d, L_phys) -> (p_cm, factor)
 
-将运动系物理动量 boost 到质心系，并计算运动学因子。
+Boost moving-frame physical momenta to the center-of-mass frame and compute the kinematic factor.
 
-# 参数
-- `p_mov`: 运动系物理动量 (可迭代的 3-矢量，单位 MeV)
-- `masses`: 每粒子质量 (MeV)，长度与 p_mov 一致
-- `d`: 总动量整数矢量 d = (L/2πħc)·P
-- `L_phys`: 物理盒子尺寸 (fm)
+# Arguments
+- `p_mov`: moving-frame physical momenta (iterable 3-vectors in MeV)
+- `masses`: per-particle masses (MeV), with the same length as p_mov
+- `d`: integer total-momentum vector d = (L/2πħc)·P
+- `L_phys`: physical finite-volume size (fm)
 
-# 返回
-- `p_cm`: 质心系动量 (与 p_mov 同类型)
-- `factor`: 运动学因子 = [ΣE'/ΣE^cm · ∏(E^cm/E')]^{1/2}
+# Returns
+- `p_cm`: center-of-mass momentum (same type as p_mov)
+- `factor`: kinematic factor = [ΣE'/ΣE^cm · ∏(E^cm/E')]^{1/2}
 
-当 d == (0,0,0) 时，p_cm = p_mov, factor = 1.0。
+When d == (0,0,0),，p_cm = p_mov, factor = 1.0。
 """
 function boost_to_cm(p_mov, masses::Vector{Float64}, d::Momentum, L_phys::Float64)
     N = length(p_mov)
     P_tot = (2π * ħc / L_phys) .* SVector{3,Float64}(d)
     P2 = sum(abs2, P_tot)
 
-    # 静止系：恒等变换
+    # Rest frame: identity transformation.
     if P2 == 0.0
         return collect(p_mov), 1.0
     end
 
-    # 运动系在壳能量 (boost 一律用相对论色散关系)
+    # Moving-frame on-shell energies (boosts always use relativistic dispersion).
     E_prime = [sqrt(m^2 + sum(abs2, p)) for (p, m) in zip(p_mov, masses)]
     E_tot = sum(E_prime)
 
@@ -739,32 +1357,30 @@ function boost_to_cm(p_mov, masses::Vector{Float64}, d::Momentum, L_phys::Float6
                      p[3] + coeff * P_tot[3])
     end
 
-    # 质心系在壳能量
+    # Center-of-mass on-shell energies.
     E_cm = [sqrt(m^2 + sum(abs2, p)) for (p, m) in zip(p_cm, masses)]
     E_tot_cm = sum(E_cm)
 
-    # 运动学因子
+    # kinematic factor
     prod_ratio = prod(E_cm[i] / E_prime[i] for i in 1:N)
     factor = sqrt(E_tot / E_tot_cm * prod_ratio)
 
     return p_cm, factor
 end
 
-# ============ 动能辅助函数 ============
+# ============ Kinetic-energy helpers ============
 
-function _expand_per_particle_mass(ch::FockChannel)
-    per_mass = Float64[]
-    for (s, m) in zip(ch.species, ch.masses)
-        append!(per_mass, fill(m, s))
-    end
-    return per_mass
-end
+_expand_per_particle_mass(ch::FockChannel, params=nothing) =
+    resolve_particle_masses(ch, params)
 
 function _kinetic_energy_rep(n_tuple, per_mass::Vector{Float64}, L_phys::Float64, kt::KineticType;
                              d::Momentum = D000)
+    length(per_mass) == length(n_tuple) || throw(DimensionMismatch(
+        "kinetic-energy mass count $(length(per_mass)) does not match " *
+        "particle count $(length(n_tuple)); resolve dynamic masses before solving"))
     pref = (2π * ħc / L_phys)^2
     T = 0.0
-    # 运动系：先转换到质心系动量
+    # Moving frame: first transform to center-of-mass momenta.
     if d != D000
         pv = 2π * ħc / L_phys
         p_mov = [pv .* Float64.(n) for n in n_tuple]
@@ -806,19 +1422,50 @@ function _build_kinetic_diag(projs::Vector, per_mass::Vector{Float64}, L_phys::F
     return T
 end
 
-# ============ V 函数参数重排适配器 ============
-# build_V_hel 调用: V_inner(n_α, σ_α, n_β, σ_β, extra_args...)
-# 用户 V_func:      V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, params)
+# ============ V-function argument-reordering adapter ============
+# build_V_hel call: V_inner(n_α, σ_α, n_β, σ_β, extra_args...)
+# User V_func:      V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, params)
 #
-# 注: 修改 1 去除子道 a-循环后, aA/aB 恒为 1, V_func 直接返回 dimA×dimB 矩阵
-#     (dim=1 时即标量), _V_adapter 统一透传, 不再做矩阵包装.
+# For non-one-dimensional κ, V_func returns a complete dimA×dimB matrix at once;
+# when one side has dimension 1, a vector may represent the row/column block.
 
-function _V_adapter(V_func, kapA, kapB, rA, rB, aA, aB, dimA, dimB, ch_α, ch_β, L_phys, params)
-    return (n_α, σ_α, n_β, σ_β, extra...) ->
-        V_func(n_α, n_β, σ_α, σ_β, kapA, kapB, rA, rB, aA, aB, ch_α, ch_β, L_phys, params)
+function _V_adapter(V_func, kapA, kapB, rA, rB, dimA, dimB,
+                    ch_α, ch_β, L_phys, params)
+    return (n_α, σ_α, n_β, σ_β, extra...) -> begin
+        value = V_func(
+            n_α, n_β, σ_α, σ_β, kapA, kapB, rA, rB,
+            ch_α, ch_β, L_phys, params)
+        if value isa Number
+            if dimA == 1 && dimB == 1
+                return value
+            end
+            iszero(value) && return zeros(ComplexF64, dimA, dimB)
+            throw(DimensionMismatch(
+                "V_func returned a nonzero scalar for κ=($kapA, $kapB); " *
+                "expected a ($dimA, $dimB) matrix (scalar zero is allowed)"))
+        end
+        if value isa AbstractMatrix
+            size(value) == (dimA, dimB) || throw(DimensionMismatch(
+                "V_func returned matrix of size $(size(value)); " *
+                "expected ($dimA, $dimB) for κ=($kapA, $kapB)"))
+            return value
+        end
+        if value isa AbstractVector
+            (dimA == 1 || dimB == 1) || throw(DimensionMismatch(
+                "V_func returned a vector for expected matrix size " *
+                "($dimA, $dimB); vectors are accepted only for row/column blocks"))
+            length(value) == dimA * dimB || throw(DimensionMismatch(
+                "V_func returned vector of length $(length(value)); " *
+                "expected $(dimA * dimB) for κ=($kapA, $kapB)"))
+            return reshape(value, dimA, dimB)
+        end
+        throw(ArgumentError(
+            "V_func must return a Number, AbstractMatrix, or row/column " *
+            "AbstractVector, got $(typeof(value))"))
+    end
 end
 
-# ============ Level 2: 子道对块 ============
+# ============ Level 2: subchannel-pair blocks ============
 
 function _build_subchannel_block(projs_α::Vector, projs_β::Vector,
                                  per_spin_α, per_spin_β,
@@ -849,28 +1496,28 @@ function _build_subchannel_block(projs_α::Vector, projs_β::Vector,
     return block
 end
 
-# ============ Level 3: 主编排函数 ============
+# ============ Level 3: main orchestration function ============
 
 """
     build_hamiltonian_block(sys::FockSystem, Gamma::String, V_func, params)
         -> Matrix{ComplexF64}
 
-为指定的不可约表示 Γ 构造完整的投影哈密顿量矩阵。
+Construct the complete projected Hamiltonian matrix for specified irrep Γ.
 
-`V_func` 签名同 potential_defs.jl:
-    V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, params)
+`V_func` signature matches potential_defs.jl:
+    V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, params)
 """
 function build_hamiltonian_block(sys::FockSystem, Gamma::String,
                                  V_func::Function, params;
                                  V_basis::Symbol=:canonical)
     Gamma in sys.selected_irreps ||
-        throw(ArgumentError("Γ=$Gamma 不在 sys.selected_irreps ($(sys.selected_irreps)) 中"))
+        throw(ArgumentError("Γ=$Gamma is not in sys.selected_irreps ($(sys.selected_irreps))"))
 
-    # 运动系暂仅支持 N ≤ 2
+    # Moving frames currently support only N ≤ 2
     if sys.d != D000
         for ch in sys.channels
             ch.N > 2 && throw(ArgumentError(
-                "运动系 (d≠0) 暂仅支持 N≤2 的道，道 \"$(ch.name)\" N=$(ch.N)"))
+                "moving frames (d≠0) currently support only channels with N≤2; channel \"$(ch.name)\" has N=$(ch.N)"))
         end
     end
 
@@ -878,7 +1525,7 @@ function build_hamiltonian_block(sys::FockSystem, Gamma::String,
     n_ch = length(sys.channels)
     d = sys.d
 
-    # ===== 预处理: 各道各子道的投影列表 =====
+    # ===== Preprocessing: projection lists for every channel and subchannel. =====
     chan_sub_data = []
     for α in 1:n_ch
         ch = sys.channels[α]
@@ -887,7 +1534,7 @@ function build_hamiltonian_block(sys::FockSystem, Gamma::String,
         per_spin_v = Rational{Int}.(per_spin)
         etas_v = Float64.(per_etas_arr)
         multi = length(ch.species) > 1
-        per_mass = _expand_per_particle_mass(ch)
+        per_mass = _expand_per_particle_mass(ch, params)
 
         subs = get_isospin_subchannels(ch, I)
         sub_entries = []
@@ -903,7 +1550,7 @@ function build_hamiltonian_block(sys::FockSystem, Gamma::String,
         push!(chan_sub_data, (ch=ch, subs=sub_entries, per_mass=per_mass))
     end
 
-    # ===== 计算总维度 =====
+    # ===== Compute total dimension. =====
     total_dim = 0
     for α in 1:n_ch
         for se in chan_sub_data[α].subs
@@ -914,7 +1561,7 @@ function build_hamiltonian_block(sys::FockSystem, Gamma::String,
 
     H_full = zeros(ComplexF64, total_dim, total_dim)
 
-    # ===== 填充各块 =====
+    # ===== Fill all blocks. =====
     row_start = 1
     for α in 1:n_ch
         ch_α = chan_sub_data[α].ch
@@ -936,13 +1583,13 @@ function build_hamiltonian_block(sys::FockSystem, Gamma::String,
                     L_phys = Float64(sys.L) * sys.a
 
                     V_adapted = _V_adapter(V_func, s_α.κ, s_β.κ,
-                                           s_α.r, s_β.r, s_α.a, s_β.a,
+                                           s_α.r, s_β.r,
                                            s_α.dim, s_β.dim, α, β, L_phys, params)
                     sub_block = _build_subchannel_block(
                         projs_α, projs_β, pspin_α, pspin_β, L_phys, V_adapted;
                         V_basis=V_basis)
 
-                    # 动能对角矩阵 (仅道对角 + 子道对角)
+                    # Kinetic-energy diagonal matrix (channel- and subchannel-diagonal only).
                     if α == β && s_α.κ == s_β.κ && s_α.r == s_β.r
                         T_diag = _build_kinetic_diag(projs_α, chan_sub_data[α].per_mass,
                                                      L_phys, ch_α.kinetic_type; d=d)
@@ -963,79 +1610,98 @@ function build_hamiltonian_block(sys::FockSystem, Gamma::String,
     return H_full
 end
 
-# ============ 本征值计算 ============
+# ============ Eigenvalue calculation ============
 
 """
     compute_spectrum(sys::FockSystem, V_func, params) -> Dict{String, Vector{Float64}}
 
-给定 FockSystem 和相互作用函数，返回各不可约表示的投影哈密顿量本征值（升序）。
-键为不可约表示名，值为本征值向量 (MeV)。
+Given a FockSystem and interaction function, return projected-Hamiltonian eigenvalues of each irrep in ascending order.
+Keys are irrep names and values are eigenvalue vectors (MeV).
 
-# 示例
+# Example
 ```julia
 evals = compute_spectrum(sys, my_V_11, MyParams(C0=2.0))
-evals["T1-"]  # T1- 能级列表
+evals["T1-"]  # T1- energy-level vector
 ```
 """
 function compute_spectrum(sys::FockSystem, V_func::Function, params;
                           n_levels::Union{Nothing, Dict{String, Int}} = nothing,
                           V_basis::Symbol=:canonical,
-                          eigs::Bool=false,
-                          V_filter=nothing)
-    basis = SystemBasis(sys)
+                          backend::Symbol=:complete_matrix,
+                          eigs::Union{Nothing,Bool}=nothing,
+                          channel_filter=nothing,
+                          entry_filter=nothing,
+                          validate_hermitian::Bool=false,
+                          exclude_subchannels::AbstractVector{SubchannelExclusion}=SubchannelExclusion[])
+    if eigs !== nothing
+        backend == :complete_matrix || throw(ArgumentError(
+            "cannot specify both backend=$backend and legacy eigs=$eigs"))
+        backend = eigs ? :projected_blocks : :complete_matrix
+    end
+    backend in (:complete_matrix, :projected_blocks, :factorized) ||
+        throw(ArgumentError(
+            "backend must be :complete_matrix, :projected_blocks, or :factorized"))
+    basis = SystemBasis(sys; exclude_subchannels=exclude_subchannels)
     build_V_hel_blocks!(basis, V_func, params; V_basis=V_basis,
-                        V_filter=V_filter)
-    if eigs
+                        channel_filter=channel_filter,
+                        entry_filter=entry_filter,
+                        validate_hermitian=validate_hermitian)
+    if backend == :projected_blocks
         n_use = something(n_levels, 20)
         return compute_spectrum_eigs(basis; n_levels=n_use)
+    elseif backend == :factorized
+        n_use = something(n_levels, 7)
+        return compute_spectrum_factorized(basis; n_levels=n_use)
     else
         return compute_spectrum(basis; n_levels=n_levels)
     end
 end
 
 """
-    compute_kinetic_spectrum(sys::FockSystem) -> Dict{String, Vector{Float64}}
+    compute_kinetic_spectrum(sys::FockSystem, params=nothing) -> Dict{String, Vector{Float64}}
 
-仅动能（无相互作用）的本征值。
+Kinetic-only (no interaction) eigenvalues. Systems containing `dynamic_mass` must provide
+`params`；Fixed-mass systems retain the original calling convention.
 """
-function compute_kinetic_spectrum(sys::FockSystem)
-    zero_V(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p) = zero(ComplexF64)
-    return compute_spectrum(sys, zero_V, nothing)
+function compute_kinetic_spectrum(sys::FockSystem, params=nothing)
+    zero_V(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p) =
+        zero(ComplexF64)
+    return compute_spectrum(sys, zero_V, params)
 end
 
-# ============ 能谱输出 ============
+# ============ Spectrum output ============
 
 """
     write_energy_spectrum(sys::FockSystem, filename::String; V_func=nothing, params=nothing)
 
-将各不可约表示的动能谱（及可选相互作用能谱）写入文本文件。
+Write kinetic spectra (and optional interacting spectra) of all irreps to a text file.
 
-若提供 `V_func`，同时输出裸动能谱和相互作用后的能谱并列出偏移 ΔE。
+If `V_func` is provided, output both bare kinetic spectra and interacting spectra, with shifts ΔE.
 """
 function write_energy_spectrum(sys::FockSystem, filename::String; V_func=nothing, params=nothing)
     io = open(filename, "w")
 
     println(io, "="^72)
-    println(io, "NPHFforFVE 能谱")
+    println(io, "NPHFforFVE spectrum")
     println(io, "="^72)
-    println(io, "  总动量 d = $(sys.d)")
-    println(io, "  总同位旋 I = $(sys.I)")
+    println(io, "  Total momentum d = $(sys.d)")
+    println(io, "  Total isospin I = $(sys.I)")
     println(io, "  L = $(sys.L), a = $(sys.a) fm  →  L_phys = $(Float64(sys.L) * sys.a) fm")
-    println(io, "  道数: $(length(sys.channels))")
+    println(io, "  Number of channels: $(length(sys.channels))")
     for (i, ch) in enumerate(sys.channels)
         ncut_i = get_Ncut(sys, i)
-        n_str = join(["$(s)×$(pt)(j=$(j),I=$(Ij),η=$η,m=$m)" for (s,pt,j,Ij,η,m) in
+        n_str = join(["$(s)×$(pt)(j=$(j),I=$(Ij),η=$η,m=$(m isa DynamicMass ? "params.$(m.name)" : m))" for (s,pt,j,Ij,η,m) in
                        zip(ch.species, ch.particle_types, ch.spins, ch.isospins, ch.etas, ch.masses)], ", ")
-        println(io, "    道 $i: \"$(ch.name)\"  N=$(ch.N)  Ncut=$ncut_i  ($n_str)")
+        println(io, "    Channel $i: \"$(ch.name)\"  N=$(ch.N)  Ncut=$ncut_i  ($n_str)")
     end
     has_V = V_func !== nothing
-    println(io, "  相互作用: $(has_V ? "已提供" : "无（纯动能）")")
+    println(io, "  Interaction: $(has_V ? "provided" : "none (kinetic energy only)")")
     println(io)
 
-    zero_V(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p) = zero(ComplexF64)
+    zero_V(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p) = zero(ComplexF64)
 
     for Gamma in sys.selected_irreps
-        H_kin = build_hamiltonian_block(sys, Gamma, zero_V, nothing)
+        H_kin = build_hamiltonian_block(sys, Gamma, zero_V, params)
         dim = size(H_kin, 1)
         dim == 0 && continue
 
@@ -1046,7 +1712,7 @@ function write_energy_spectrum(sys::FockSystem, filename::String; V_func=nothing
             ev_full = sort(real.(eigvals(Hermitian(H_full))))
         end
 
-        # 运动系: 质心系本征值 boost 到运动系
+        # Moving frame: boost center-of-mass eigenvalues to the moving frame.
         if sys.d != D000
             L_phys = Float64(sys.L) * sys.a
             P_mag = (2π * ħc / L_phys) * sqrt(Float64(sum(abs2, sys.d)))
@@ -1056,7 +1722,7 @@ function write_energy_spectrum(sys::FockSystem, filename::String; V_func=nothing
             end
         end
 
-        # 道维度分解
+        # Channel-dimension decomposition
         ch_dims = Int[]
         for α in 1:length(sys.channels)
             ch_dims_α = _channel_dim_for_irrep(sys, Gamma, α)
@@ -1064,7 +1730,7 @@ function write_energy_spectrum(sys::FockSystem, filename::String; V_func=nothing
         end
 
         println(io, "─"^72)
-        println(io, "不可约表示: $Gamma  (投影维数 = $dim)")
+        println(io, "Irrep: $Gamma  (projected dimension = $dim)")
         if has_V
             println(io, rpad("  #", 5), rpad("E_kin (MeV)", 14), rpad("E_full (MeV)", 14), "ΔE (MeV)")
             println(io, "  " * "─"^50)
@@ -1088,7 +1754,7 @@ function write_energy_spectrum(sys::FockSystem, filename::String; V_func=nothing
 
     println(io, "="^72)
     close(io)
-    println("能谱已写入: $(abspath(filename))")
+    println("Spectrum written to: $(abspath(filename))")
     return nothing
 end
 

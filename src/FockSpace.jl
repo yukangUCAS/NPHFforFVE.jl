@@ -8,14 +8,17 @@ using ..NPHFforFVE: OH_IRREP_NAMES, OH2_IRREP_NAMES, LG_IRREP_NAMES
 export FockChannel, FockSystem, setup_fock_system
 export get_N, get_num_species, get_total_N
 export get_isospin_subchannels
+export SubchannelExclusion
 export KineticType, relativistic, nonrelativistic
+export DynamicMass, dynamic_mass, has_dynamic_mass
+export resolve_mass, resolve_masses, resolve_particle_masses
 
-# ============ 动能色散关系 ============
+# ============ Kinetic-energy dispersion ============
 
 """
     KineticType
 
-枚举类型，指定动能色散关系。
+Enumeration specifying the kinetic-energy dispersion.
 
 - `relativistic`: E(p) = √(m² + p²)
 - `nonrelativistic`: E(p) = m + p²/(2m)
@@ -27,25 +30,63 @@ end
 
 # ============ FockChannel ============
 
+"""A particle mass supplied by `params.<name>` at evaluation time."""
+struct DynamicMass
+    name::Symbol
+
+    function DynamicMass(name::Symbol)
+        isempty(String(name)) && throw(ArgumentError(
+            "dynamic mass parameter name must not be empty"))
+        new(name)
+    end
+end
+
+"""
+    dynamic_mass(name::Symbol) -> DynamicMass
+
+Mark a `FockChannel` mass as dynamic. Every spectrum evaluation resolves it
+from the field `params.<name>`.
+"""
+dynamic_mass(name::Symbol) = DynamicMass(name)
+
+function Base.show(io::IO, mass::DynamicMass)
+    print(io, "dynamic_mass(", repr(mass.name), ")")
+end
+
+const MassSpec = Union{Float64,DynamicMass}
+
+function _normalize_mass(mass, species_index::Int)
+    if mass isa DynamicMass
+        return mass
+    elseif mass isa Real && !(mass isa Bool)
+        value = Float64(mass)
+        isfinite(value) && value > 0 || throw(ArgumentError(
+            "Species $species_index: mass must be finite and > 0 MeV, got $mass"))
+        return value
+    end
+    throw(ArgumentError(
+        "Species $species_index: mass must be a real number or DynamicMass, got $(typeof(mass))"))
+end
+
 """
     FockChannel(name, species, particle_types, masses, spins, isospins)
 
-单个 Fock 道。总同位旋 I 为全局量，存于 FockSystem。
+A single Fock channel. The total isospin `I` is global and stored in `FockSystem`.
 
-# 参数
-- `name::String`: 道名，如 \"ππN\"
-- `species::Vector{Int}`: 各粒子种类粒子数
-- `particle_types::Vector{Symbol}`: 各粒子种类粒子类型 (`:boson` / `:fermion`)
-- `masses::Vector{Float64}`: 各粒子种类质量 (MeV)
-- `spins::Vector{Rational{Int}}`: 各粒子种类自旋 j
-- `isospins::Vector{Rational{Int}}`: 各粒子种类同位旋 j
+# Arguments
+- `name::String`: channel name, for example `\"ππN\"`
+- `species::Vector{Int}`: particle count for each species
+- `particle_types::Vector{Symbol}`: particle type for each species (`:boson` or `:fermion`)
+- `masses`: mass of each species in MeV; use a positive real number for a fixed mass or `dynamic_mass(:parameter_name)` for a dynamic mass
+- `spins::Vector{Rational{Int}}`: spin `j` of each species
+- `isospins::Vector{Rational{Int}}`: isospin `j` of each species
 """
 struct FockChannel
     name::String
     N::Int
     species::Vector{Int}
     particle_types::Vector{Symbol}
-    masses::Vector{Float64}
+    masses::Union{Vector{Float64},Vector{MassSpec}}
     spins::Vector{Rational{Int}}
     isospins::Vector{Rational{Int}}
     etas::Vector{Float64}
@@ -56,101 +97,205 @@ struct FockChannel
                          spins, isospins, etas, kinetic_type::KineticType)
         n = length(species)
         name     = String(name)
-        masses   = Float64.(masses)
+        normalized_masses = MassSpec[
+            _normalize_mass(m, i) for (i, m) in enumerate(masses)]
+        masses = all(m -> m isa Float64, normalized_masses) ?
+            Float64[normalized_masses...] : normalized_masses
         spins    = Rational{Int}.(spins)
         isospins = Rational{Int}.(isospins)
         etas     = Float64.(etas)
-        all(x -> x > 0, species) || throw(ArgumentError("每种粒子种类的粒子数必须 > 0"))
-        length(particle_types) == n || throw(ArgumentError("particle_types 长度必须等于 species 长度"))
-        length(masses) == n        || throw(ArgumentError("masses 长度必须等于 species 长度"))
-        length(spins) == n         || throw(ArgumentError("spins 长度必须等于 species 长度"))
-        length(isospins) == n      || throw(ArgumentError("isospins 长度必须等于 species 长度"))
-        length(etas) == n          || throw(ArgumentError("etas 长度必须等于 species 长度"))
+        all(x -> x > 0, species) || throw(ArgumentError("each species must contain at least one particle"))
+        length(particle_types) == n || throw(ArgumentError("particle_types must have the same length as species"))
+        length(masses) == n        || throw(ArgumentError("masses must have the same length as species"))
+        length(spins) == n         || throw(ArgumentError("spins must have the same length as species"))
+        length(isospins) == n      || throw(ArgumentError("isospins must have the same length as species"))
+        length(etas) == n          || throw(ArgumentError("etas must have the same length as species"))
         for (i, pt) in enumerate(particle_types)
             pt in (:boson, :fermion) || throw(ArgumentError(
-                "Species $i: particle_type 必须是 :boson 或 :fermion，得到 :$pt"))
+                "Species $i: particle_type must be :boson or :fermion, got :$pt"))
         end
         for (i, eta) in enumerate(etas)
             eta ∈ (-1.0, 1.0) || throw(ArgumentError(
-                "Species $i: 内禀宇称 eta 必须是 +1 或 -1，得到 $eta"))
+                "Species $i: intrinsic parity eta must be +1 or -1, got $eta"))
         end
-        _validate("spin", spins)
-        _validate("isospin", isospins)
+        _validate_spins(spins)
+        _validate_isospins(isospins)
         N = sum(species)
         new(name, N, species, particle_types, masses, spins, isospins, etas, kinetic_type)
     end
 end
 
-function _validate(label::String, vals::Vector{Rational{Int}})
-    allowed = (0, 1//2, 1)
+has_dynamic_mass(ch::FockChannel) = any(m -> m isa DynamicMass, ch.masses)
+
+resolve_mass(mass::Float64, params=nothing) = mass
+
+function resolve_mass(mass::DynamicMass, params)
+    params === nothing && throw(ArgumentError(
+        "dynamic mass $(repr(mass.name)) requires a parameter object"))
+    hasproperty(params, mass.name) || throw(ArgumentError(
+        "dynamic mass $(repr(mass.name)) requires parameter field `$(mass.name)`, " *
+        "but $(typeof(params)) does not contain it"))
+    raw = getproperty(params, mass.name)
+    raw isa Real && !(raw isa Bool) || throw(ArgumentError(
+        "dynamic mass parameter `$(mass.name)` must be a real number, got $(typeof(raw))"))
+    value = Float64(raw)
+    isfinite(value) && value > 0 || throw(ArgumentError(
+        "dynamic mass parameter `$(mass.name)` must be finite and > 0 MeV, got $raw"))
+    return value
+end
+
+function resolve_masses(ch::FockChannel, params=nothing)
+    result = Vector{Float64}(undef, length(ch.masses))
+    for i in eachindex(ch.masses)
+        try
+            result[i] = resolve_mass(ch.masses[i], params)
+        catch err
+            err isa ArgumentError || rethrow()
+            throw(ArgumentError(
+                "Fock channel $(repr(ch.name)), species $i: $(sprint(showerror, err))"))
+        end
+    end
+    return result
+end
+
+function resolve_particle_masses(ch::FockChannel, params=nothing)
+    species_masses = resolve_masses(ch, params)
+    result = Float64[]
+    sizehint!(result, ch.N)
+    for (count, mass) in zip(ch.species, species_masses)
+        append!(result, fill(mass, count))
+    end
+    return result
+end
+
+function _validate_quantum_numbers(label::String,
+                                   vals::Vector{Rational{Int}},
+                                   allowed)
     for (i, v) in enumerate(vals)
         v in allowed || throw(ArgumentError(
-            "Species $i: $label = $v 暂不支持，目前仅支持 0, 1/2, 1"))
+            "Species $i: $label = $v is not currently supported; only " *
+            join(allowed, ", ")))
     end
 end
+
+_validate_spins(vals::Vector{Rational{Int}}) =
+    _validate_quantum_numbers("spin", vals, (0, 1//2, 1, 3//2))
+
+_validate_isospins(vals::Vector{Rational{Int}}) =
+    _validate_quantum_numbers("isospin", vals, (0, 1//2, 1, 3//2))
 
 get_N(ch::FockChannel) = ch.N
 get_num_species(ch::FockChannel) = length(ch.species)
 
-# ============ 同位旋子道 ============
+# ============ Isospin subchannels ============
 
 """
     IsospinSubChannel
 
-一个同位旋子道，由 (κ, r) 标识。a 字段恒为 1 (已废弃)。
+An isospin subchannel, identified by `(κ, r)`.
 
-- `κ`: S_N 不可约表示标签。单物种: String (如 \"[2,1]\")；
-       多物种: NTuple{K,String} (如 (\"[2]\", \"[1]\") 表示 S₂×S₁)
-- `r::Int`: 多重度标号 (1 ≤ r ≤ multiplicity)
-- `a::Int`: 已废弃，恒为 1。X 矩阵已包含完整 dim(κ) 行空间。
-- `dim::Int`: dim(κ)，即不可约表示总维度
-- `mult::Int`: 该 κ 的重数
+- `κ`: S_N irrep label. For one species: a `String` (for example `"[2,1]"`);
+       for multiple species: `NTuple{K,String}` (for example `("[2]", "[1]")` for S₂×S₁).
+- `r::Int`: unique physical-subchannel index for fixed κ (1 ≤ r ≤ mult)
+- `dim::Int`: dim(κ)，the total irrep dimension
+- `mult::Int`: total number of physical subchannels for fixed κ
+- `J_tuple::Tuple`: total isospin of each species subsystem
+- `coupling_path::Tuple`: intermediate isospins in a left-associated coupling scheme (J₁₂, J₁₂₃, ...)
+- `multiplicity_tuple::Tuple`: internal Schur–Weyl multiplicity-copy index for each species
 """
 struct IsospinSubChannel
     κ
     r::Int
-    a::Int
     dim::Int
     mult::Int
+    J_tuple::Tuple
+    coupling_path::Tuple
+    multiplicity_tuple::Tuple
+end
+
+"""A stable model-space exclusion: all `r` at `kappa`, or one exact `(kappa,r)`."""
+struct SubchannelExclusion
+    channel_name::String
+    kappa
+    r::Union{Nothing,Int}
+end
+
+Base.:(==)(a::SubchannelExclusion, b::SubchannelExclusion) =
+    a.channel_name == b.channel_name && a.kappa == b.kappa && a.r == b.r
+Base.hash(x::SubchannelExclusion, h::UInt) = hash((x.channel_name, x.kappa, x.r), h)
+
+function _is_subchannel_excluded(exclusions, channel_name::AbstractString,
+                                 sub::IsospinSubChannel)
+    return any(ex -> ex.channel_name == channel_name && ex.kappa == sub.κ &&
+                     (ex.r === nothing || ex.r == sub.r), exclusions)
+end
+
+function _active_subchannels(ch::FockChannel, I::Rational{Int}, exclusions)
+    return [sub for sub in get_isospin_subchannels(ch, I)
+            if !_is_subchannel_excluded(exclusions, ch.name, sub)]
 end
 
 """
     get_isospin_subchannels(ch::FockChannel, I::Rational{Int}) -> Vector{IsospinSubChannel}
 
-返回该道在总同位旋 I 下的所有同位旋子道列表。
-单粒子种类道调用 `isospin_decomposition`，多粒子种类道调用 `multi_isospin_decomposition`。
+Return all isospin subchannels of this channel at total isospin `I`.
+Single-species channels use `isospin_decomposition`; multi-species channels use `multi_isospin_decomposition`.
 """
 function get_isospin_subchannels(ch::FockChannel, I::Rational{Int})
+    n_threehalf = sum((ch.species[s] for s in eachindex(ch.species)
+                       if ch.isospins[s] == 3//2); init=0)
+    n_threehalf <= 2 || throw(ArgumentError(
+        "Fock channel \"$(ch.name)\" contains $n_threehalf particles with I=3/2;" *
+        "at most two particles with I=3/2 are currently supported in each FockChannel"))
     if length(ch.species) != 1
         return _multi_species_subchannels(ch, I)
     end
-    # 单物种：保持原有逻辑不变
+    # Single species: preserve the original decomposition logic.
     N_spec = ch.species[1]
     j_spec = ch.isospins[1]
     decomp = isospin_decomposition(N_spec, j_spec)
-    sub_channels = IsospinSubChannel[]
+    records = NamedTuple[]
     for (J, κ, mult) in decomp.entries
         J == I || continue
         dim_κ = get_SN_irrep_dim(N_spec, κ)
-        for r in 1:mult
-            push!(sub_channels, IsospinSubChannel(κ, r, 1, dim_κ, mult))
+        for μ in 1:mult
+            push!(records, (κ=κ, dim=dim_κ, J_tuple=(J,),
+                            coupling_path=(), multiplicity_tuple=(μ,)))
         end
     end
-    return sub_channels
+    return _number_subchannels(records)
 end
 
 function _multi_species_subchannels(ch::FockChannel, I::Rational{Int})
     decomp = multi_isospin_decomposition(ch.species, ch.isospins, I)
-    sub_channels = IsospinSubChannel[]
+    records = NamedTuple[]
     for entry in decomp.entries
         dim_κ = 1
         for (s, κ_s) in enumerate(entry.κ_tuple)
             dim_κ *= get_SN_irrep_dim(ch.species[s], κ_s)
         end
-        total_mult = entry.coupling_mult * entry.internal_mult
-        for r in 1:total_mult
-            push!(sub_channels, IsospinSubChannel(entry.κ_tuple, r, 1, dim_κ, total_mult))
+        μ_ranges = map(m -> 1:m, entry.internal_multiplicities)
+        for μ in Iterators.product(μ_ranges...), path in entry.coupling_paths
+            push!(records, (κ=entry.κ_tuple, dim=dim_κ, J_tuple=entry.J_tuple,
+                            coupling_path=path, multiplicity_tuple=Tuple(μ)))
         end
+    end
+    return _number_subchannels(records)
+end
+
+function _number_subchannels(records::Vector{<:NamedTuple})
+    totals = Dict{Any,Int}()
+    for record in records
+        totals[record.κ] = get(totals, record.κ, 0) + 1
+    end
+    next_r = Dict{Any,Int}()
+    sub_channels = IsospinSubChannel[]
+    for record in records
+        r = get(next_r, record.κ, 0) + 1
+        next_r[record.κ] = r
+        push!(sub_channels, IsospinSubChannel(
+            record.κ, r, record.dim, totals[record.κ],
+            record.J_tuple, record.coupling_path, record.multiplicity_tuple))
     end
     return sub_channels
 end
@@ -160,16 +305,16 @@ end
 """
     FockSystem(d, Ncut, channels, L, a, I; Ncut_channel=nothing)
 
-多道 Fock 体系。
+A multi-channel Fock system.
 
-# 参数
-- `d::Momentum`: 总动量（全局）
-- `Ncut::Int`: 全局动量截断；若 `Ncut_channel` 非空则被覆盖
-- `channels::Vector{FockChannel}`: 各 Fock 道
-- `L::Int`: 有限体积尺寸（格点单位，正整数）
-- `a::Float64`: 格距（fm）
-- `I::Rational{Int}`: 总同位旋（全局守恒量）
-- `Ncut_channel`: 可选，每道单独的 Ncut 向量，长度等于通道数
+# Arguments
+- `d::Momentum`: total momentum (global)
+- `Ncut::Int`: global momentum cutoff; overridden when `Ncut_channel` is provided
+- `channels::Vector{FockChannel}`: Fock channels
+- `L::Int`: finite-volume extent (lattice units; positive integer)
+- `a::Float64`: lattice spacing (fm)
+- `I::Rational{Int}`: Total isospin (global conserved quantity)
+- `Ncut_channel`: optional per-channel Ncut vector, whose length equals the number of channels
 """
 struct FockSystem
     d::Momentum
@@ -184,18 +329,18 @@ struct FockSystem
     function FockSystem(d, Ncut::Int, channels::Vector{FockChannel},
                         L::Int, a::Real, I, selected_irreps::Vector{String};
                         Ncut_channel::Union{Nothing, Vector{Int}}=nothing)
-        Ncut >= 1 || throw(ArgumentError("Ncut 必须 ≥ 1"))
-        L > 0 || throw(ArgumentError("L 必须为正整数"))
-        a > 0 || throw(ArgumentError("格距 a 必须 > 0"))
-        length(selected_irreps) > 0 || throw(ArgumentError("必须至少选择一个不可约表示"))
+        Ncut >= 1 || throw(ArgumentError("Ncut must be ≥ 1"))
+        L > 0 || throw(ArgumentError("L must be a positive integer"))
+        a > 0 || throw(ArgumentError("lattice spacing a must be > 0"))
+        length(selected_irreps) > 0 || throw(ArgumentError("at least one irrep must be selected"))
         for irr in selected_irreps
-            all(x -> isascii(x), irr) || throw(ArgumentError("无效的不可约表示名: $irr"))
+            all(x -> isascii(x), irr) || throw(ArgumentError("invalid irrep name: $irr"))
         end
         I_r = Rational{Int}(I)
         if Ncut_channel !== nothing
             length(Ncut_channel) == length(channels) || throw(ArgumentError(
-                "Ncut_channel 长度必须等于 channels 长度"))
-            all(x -> x >= 1, Ncut_channel) || throw(ArgumentError("各道 Ncut 必须 ≥ 1"))
+                "Ncut_channel length must equal channels length"))
+            all(x -> x >= 1, Ncut_channel) || throw(ArgumentError("each channel Ncut must be ≥ 1"))
         end
         d_vec = _to_momentum(d)
         new(d_vec, Ncut, Ncut_channel, channels, L, Float64(a), I_r, selected_irreps)
@@ -207,7 +352,7 @@ get_total_N(sys::FockSystem) = sum(ch.N for ch in sys.channels)
 """
     get_Ncut(sys::FockSystem, ch_idx::Int)
 
-返回第 `ch_idx` 道的有效 Ncut。
+Return the effective `Ncut` of channel `ch_idx`.
 """
 function get_Ncut(sys::FockSystem, ch_idx::Int)
     if sys.Ncut_channel !== nothing
@@ -217,73 +362,73 @@ function get_Ncut(sys::FockSystem, ch_idx::Int)
     end
 end
 
-# ============ 交互式构建 ============
+# ============ Interactive construction ============
 
 """
     setup_fock_system()
 
-REPL 交互式构建 `FockSystem`。逐步引导用户输入总动量、截断和各道信息。
+Interactively construct a `FockSystem` in the REPL, with prompts for total momentum, cutoffs, and channel data.
 """
 function setup_fock_system()
     println("="^50)
-    println("Fock Space 构建")
+    println("Fock-space setup")
     println("="^50)
 
-    # 总动量
-    print("\n总动量 (格式: nx ny nz, 默认 0 0 0): ")
+    # Total momentum
+    print("\nTotal momentum (format: nx ny nz; default: 0 0 0): ")
     d_input = strip(readline())
     if isempty(d_input)
         d = D000
     else
         parts = parse.(Int, split(d_input))
-        length(parts) == 3 || throw(ArgumentError("总动量必须是 3 个整数"))
+        length(parts) == 3 || throw(ArgumentError("total momentum must contain three integers"))
         d = Momentum(parts...)
     end
-    println("  总动量 d = $d")
+    println("  Total momentum d = $d")
 
-    # Ncut 策略
-    print("\n使用全局 Ncut? (y/n, 默认 y): ")
+    # Ncut policy
+    print("\nUse a global Ncut? (y/n; default: y): ")
     use_global = strip(readline())
     use_global = isempty(use_global) || lowercase(use_global)[1] == 'y'
 
     Ncut_global = 0
     if use_global
-        print("全局 Ncut (格点单位，|n|² 截断): ")
+        print("Global Ncut (lattice units; |n|² cutoff): ")
         Ncut_global = parse(Int, readline())
-        Ncut_global >= 1 || throw(ArgumentError("Ncut 必须 ≥ 1"))
+        Ncut_global >= 1 || throw(ArgumentError("Ncut must be ≥ 1"))
     end
 
-    # 有限体积参数
-    print("\n有限体积尺寸 L (格点单位, 正整数): ")
+    # Finite-volume parameters
+    print("\nFinite-volume extent L (lattice units; positive integer): ")
     L = parse(Int, readline())
-    L > 0 || throw(ArgumentError("L 必须为正整数"))
+    L > 0 || throw(ArgumentError("L must be a positive integer"))
 
-    print("格距 a (fm): ")
+    print("Lattice spacing a (fm): ")
     a = parse(Float64, readline())
-    a > 0 || throw(ArgumentError("格距 a 必须 > 0"))
+    a > 0 || throw(ArgumentError("lattice spacing a must be > 0"))
 
-    # 总同位旋（全局守恒量）
-    print("\n总同位旋 I (如 0, 1/2, 1, 3/2, 2): ")
+    # Total isospin (global conserved quantity)
+    print("\nTotal isospin I (for example 0, 1/2, 1, 3/2, 2): ")
     I = _parse_rational(readline())
 
-    # 道数
-    print("\nFock 道数: ")
+    # Number of channels
+    print("\nNumber of Fock channels: ")
     num_fock = parse(Int, readline())
-    num_fock >= 1 || throw(ArgumentError("至少需要 1 个 Fock 道"))
+    num_fock >= 1 || throw(ArgumentError("at least one Fock channel is required"))
 
     channels = FockChannel[]
     Ncut_channel = use_global ? nothing : Int[]
 
     for i in 1:num_fock
-        println("\n--- 道 $i ---")
-        print("  道名 (需键入引号，如 \"ππN\"): ")
+        println("\n--- Channel $i ---")
+        print("  Channel name (quotes optional; for example \"ππN\"): ")
         name_input = strip(readline())
         name = replace(name_input, '"' => "")
-        isempty(name) && throw(ArgumentError("道名不能为空"))
+        isempty(name) && throw(ArgumentError("channel name must not be empty"))
 
-        print("  粒子种类数: ")
+        print("  Number of particle species: ")
         n_species = parse(Int, readline())
-        n_species >= 1 || throw(ArgumentError("粒子种类数 ≥ 1"))
+        n_species >= 1 || throw(ArgumentError("the number of particle species must be ≥ 1"))
 
         species     = Int[]
         ptypes      = Symbol[]
@@ -293,93 +438,93 @@ function setup_fock_system()
         etas        = Float64[]
 
         for s in 1:n_species
-            println("  粒子种类 $s:")
-            print("    粒子数: ")
+            println("  Particle species $s:")
+            print("    Number of particles: ")
             push!(species, parse(Int, readline()))
-            print("    质量 (MeV): ")
+            print("    Mass (MeV): ")
             push!(masses, parse(Float64, readline()))
-            print("    类型 (boson/fermion): ")
+            print("    Type (boson/fermion): ")
             pt = Symbol(lowercase(strip(readline())))
-            pt in (:boson, :fermion) || throw(ArgumentError("类型必须是 boson 或 fermion"))
+            pt in (:boson, :fermion) || throw(ArgumentError("particle type must be boson or fermion"))
             push!(ptypes, pt)
-            print("    自旋 j (0, 1/2, 1): ")
+            print("    Spin j (0, 1/2, 1): ")
             push!(spins, _parse_rational(readline()))
-            print("    同位旋 j (0, 1/2, 1): ")
+            print("    Isospin i (0, 1/2, 1): ")
             push!(isospins, _parse_rational(readline()))
-            print("    内禀宇称 (+1/-1): ")
+            print("    Intrinsic parity (+1/-1): ")
             push!(etas, parse(Float64, readline()))
         end
 
-        print("    动能色散关系 (relativistic/nonrelativistic, 默认 relativistic): ")
+        print("    Kinetic-energy dispersion (relativistic/nonrelativistic; default: relativistic): ")
         kt_input = strip(readline())
         if isempty(kt_input) || lowercase(kt_input) == "relativistic"
             kt = relativistic
         elseif lowercase(kt_input) == "nonrelativistic"
             kt = nonrelativistic
         else
-            throw(ArgumentError("色散关系必须是 relativistic 或 nonrelativistic"))
+            throw(ArgumentError("dispersion must be relativistic or nonrelativistic"))
         end
 
         if !use_global
-            print("  该道 Ncut (|n|² 截断): ")
+            print("  Ncut for this channel (|n|² cutoff): ")
             push!(Ncut_channel, parse(Int, readline()))
         end
 
         ch = FockChannel(name, species, ptypes, masses, spins, isospins, etas, kt)
         push!(channels, ch)
 
-        # 显示同位旋子道信息
+        # Show isospin-subchannel information
         subs = get_isospin_subchannels(ch, I)
         if !isempty(subs)
-            println("  ✓ 道 \"$name\" (N=$(ch.N)) → " *
-                    "$(length(unique(s->(s.κ, s.mult), subs))) 个子道")
+            println("  ✓ Channel \"$name\" (N=$(ch.N)) → " *
+                    "$(length(unique(s->(s.κ, s.mult), subs))) subchannel(s)")
             for s_ch in unique(s -> (s.κ, s.mult), subs)
                 dim_str = _kappa_dim_display(ch, s_ch.κ)
                 println("      κ=$(s_ch.κ)  r=1:$(s_ch.mult)  dim=$dim_str")
             end
         else
-            println("  ✓ 道 \"$name\" (N=$(ch.N)) 已添加")
+            println("  ✓ Channel \"$name\" (N=$(ch.N)) added")
         end
     end
 
-    # 确定对称群（考虑费米子 → 双覆盖）
-    has_fermion = any(ch -> isodd(sum(ch.species[i] for i in 1:length(ch.species) if ch.particle_types[i] == :fermion)), channels)
+    # Determine the symmetry group (fermions require the double cover)
+    has_fermion = any(ch -> isodd(sum((ch.species[i] for i in 1:length(ch.species) if ch.particle_types[i] == :fermion); init=0)), channels)
     _, group_name = group_for_momentum(d; double_cover=has_fermion)
     available_irreps = _get_irrep_list(group_name)
-    println("\n对称群: $group_name (has_fermion=$has_fermion)")
-    println("可选不可约表示:")
+    println("\nSymmetry group: $group_name (has_fermion=$has_fermion)")
+    println("Available irreps:")
     for (i, irr) in enumerate(available_irreps)
         println("  [$i] $irr")
     end
-    print("选择需要的不可约表示 (空格分隔序号): ")
+    print("Select required irreps (space-separated indices): ")
     irr_input = strip(readline())
     if isempty(irr_input)
-        error("必须至少选择一个不可约表示")
+        error("at least one irrep must be selected")
     end
     indices = parse.(Int, split(irr_input))
     selected_irreps = [available_irreps[i] for i in indices]
-    println("  已选: $selected_irreps")
+    println("  Selected: $selected_irreps")
 
     sys = FockSystem(d, Ncut_global, channels, L, a, I, selected_irreps;
                      Ncut_channel=Ncut_channel)
 
     println("\n" * "="^50)
-    println("Fock 体系构建完成")
+    println("Fock-system setup complete")
     _print_system(sys)
 
-    # 预填充代表动量/螺旋度缓存
-    println("\n预计算代表动量与代表螺旋度...")
+    # Prepopulate representative-momentum/helicity caches
+    println("\nPrecomputing representative momenta and helicities...")
     for (i, ch) in enumerate(channels)
         ncut_i = get_Ncut(sys, i)
         reps = cache_channel_reps!(ch.species, ch.particle_types, ncut_i, sys.d, ch.spins)
         n_hel = sum(length(get_helicity_reps(rep, ch.species, ch.particle_types, ch.spins, sys.d))
                     for rep in reps)
-        println("  道 $i \"$(ch.name)\": $(length(reps)) 代表动量, $n_hel 代表螺旋度")
+        println("  Channel $i \"$(ch.name)\": $(length(reps)) representative momenta, $n_hel representative helicities")
     end
 
-    # 生成 V 函数模板
+    # Generate the interaction template
     template_path = _generate_potential_template(sys)
-    println("\n请在 $(template_path) 中填写各道对之间的 V 函数。")
+    println("\nFill in the interaction functions between channel pairs in $(template_path).")
 
     return sys
 end
@@ -388,7 +533,7 @@ function _parse_rational(s::AbstractString)
     s = strip(s)
     if '/' in s
         parts = split(s, '/')
-        length(parts) == 2 || throw(ArgumentError("无法解析有理数: $s"))
+        length(parts) == 2 || throw(ArgumentError("cannot parse rational number: $s"))
         return parse(Int, parts[1]) // parse(Int, parts[2])
     else
         return parse(Int, s) // 1
@@ -403,7 +548,7 @@ function _get_irrep_list(group_name::Symbol)
     elseif haskey(LG_IRREP_NAMES, group_name)
         return copy(LG_IRREP_NAMES[group_name])
     else
-        error("未知对称群: $group_name")
+        error("unknown symmetry group: $group_name")
     end
 end
 
@@ -422,24 +567,24 @@ end
 _kappa_dim_display(ch::FockChannel, κ) = string(_kappa_dim(ch, κ))
 
 function _print_system(sys::FockSystem)
-    println("  总动量 d = $(sys.d)")
+    println("  Total momentum d = $(sys.d)")
     println("  L = $(sys.L), a = $(sys.a) fm")
-    println("  总同位旋 I = $(sys.I)")
-    println("  选定的不可约表示: $(sys.selected_irreps)")
+    println("  Total isospin I = $(sys.I)")
+    println("  Selected irreps: $(sys.selected_irreps)")
     nc = sys.Ncut_channel
     for (i, ch) in enumerate(sys.channels)
         ncut_i = nc !== nothing ? nc[i] : sys.Ncut
         subs = get_isospin_subchannels(ch, sys.I)
         n_sub = length(unique(s -> (s.κ, s.mult), subs))
-        println("  道 $i: $(ch.name)  N=$(ch.N)  Ncut=$ncut_i  ($n_sub 个同位旋子道)  $(ch.kinetic_type)")
+        println("  Channel $i: $(ch.name)  N=$(ch.N)  Ncut=$ncut_i  ($n_sub isospin subchannel(s))  $(ch.kinetic_type)")
         for s in 1:length(ch.species)
-            println("    粒子种类$s: $(ch.species[s]) × ($(ch.particle_types[s]), " *
+            println("    Particle species $s: $(ch.species[s]) × ($(ch.particle_types[s]), " *
                     "j=$(ch.spins[s]), I=$(ch.isospins[s]), η=$(ch.etas[s]), m=$(ch.masses[s]) MeV)")
         end
     end
 end
 
-# ============ 生成 V 函数模板 ============
+# ============ Generate the interaction template ============
 
 function _generate_potential_template(sys::FockSystem, output_file::String="potential_defs.jl")
     path = output_file
@@ -457,13 +602,9 @@ function _generate_potential_template(sys::FockSystem, output_file::String="pote
     println(io, "#       p0 = MyParams(; C0=2.0)               # override C0")
     println(io, "#       x  = to_vector(p0)                    # -> Vector{Float64}")
     println(io, "#       names = param_names(MyParams)         # -> [\"C0\", \"C1\", ...]")
-    println(io, "#       p_best = from_vector(MyParams, x_fit) # after IMINUIT")
     println(io, "#")
     println(io, "#   2. Fill in the my_V_αβ functions below.")
     println(io, "#      They receive `params::MyParams` as the last argument.")
-    println(io, "#")
-    println(io, "#   3. Define `param_bounds(::Type{MyParams})` at the bottom")
-    println(io, "#      of this file with your IMINUIT fit bounds.")
     println(io, "#")
     println(io, "# System summary:")
     println(io, "#   total d = $(sys.d)")
@@ -520,7 +661,6 @@ function _generate_potential_template(sys::FockSystem, output_file::String="pote
                     push!(sig_keys, "kapA::String", "kapB::String")
                 end
                 push!(sig_keys, "rA::Int", "rB::Int")
-                push!(sig_keys, "aA::Int", "aB::Int")
             end
 
             sig_str = join(["nA::NTuple{$N_α,Momentum}",
@@ -551,17 +691,11 @@ function _generate_potential_template(sys::FockSystem, output_file::String="pote
         end
     end
 
-    println(io, "# ============ IMINUIT bounds ============")
-    println(io, "# Override param_bounds for MyParams. Each tuple is (lower, upper).")
-    println(io, "# function param_bounds(::Type{MyParams})")
-    println(io, "#     return [(0.0, Inf), (0.0, Inf), (0.0, Inf)]")
-    println(io, "# end")
-
     close(io)
     return path
 end
 
-# ============ 分支生成辅助 ============
+# ============ Branch-generation helpers ============
 
 function _gen_physical_momenta(io, L::Int, N::Int, label::String)
     pis = join(["p$(label)$i = (2π/$L) .* n$label[$i]" for i in 1:N], "; ")
@@ -573,7 +707,7 @@ _same_sn_group(ch_α::FockChannel, ch_β::FockChannel) = ch_α.species == ch_β.
 function _need_branch(subs::Vector{IsospinSubChannel}, field::Symbol)
     vals = Set{Any}()
     for s in subs
-        push!(vals, field == :κ ? s.κ : field == :r ? s.r : s.a)
+        push!(vals, field == :κ ? s.κ : s.r)
     end
     return length(vals) > 1
 end
@@ -585,8 +719,8 @@ function _gen_same_group_branches(io, subs_α, subs_β)
     need_κ = _need_branch(subs_α, :κ)
     need_r = _need_branch(subs_α, :r) || _need_branch(subs_β, :r)
 
-    println(io, "    # Same permutation group: kappa-diagonal + a-diagonal, only reduced matrix elements depend on r")
-    println(io, "    kapA == kapB && aA == aB || return 0.0")
+    println(io, "    # Same permutation group: kappa-diagonal; return the complete carrier-space matrix")
+    println(io, "    kapA == kapB || return 0.0")
     println(io)
 
     if !need_κ && !need_r
@@ -619,13 +753,12 @@ end
 function _gen_diff_group_branches(io, subs_α, subs_β)
     need_κ = _need_branch(subs_α, :κ) || _need_branch(subs_β, :κ)
     need_r = _need_branch(subs_α, :r) || _need_branch(subs_β, :r)
-    need_a = _need_branch(subs_α, :a) || _need_branch(subs_β, :a)
-    any_branch = need_κ || need_r || need_a
+    any_branch = need_κ || need_r
 
     if !any_branch
         s_α = subs_α[1]
         s_β = subs_β[1]
-        println(io, "    # <$(s_α.κ),r=$(s_α.r),a=$(s_α.a)| <- |$(s_β.κ),r=$(s_β.r),a=$(s_β.a)>")
+        println(io, "    # <$(s_α.κ),r=$(s_α.r)| <- |$(s_β.κ),r=$(s_β.r)>")
         println(io, "    return 0.0")
         return
     end
@@ -635,11 +768,10 @@ function _gen_diff_group_branches(io, subs_α, subs_β)
         conds = String[]
         need_κ && push!(conds, "kapA == \"$(s_α.κ)\" && kapB == \"$(s_β.κ)\"")
         need_r && push!(conds, "rA == $(s_α.r) && rB == $(s_β.r)")
-        need_a && push!(conds, "aA == $(s_α.a) && aB == $(s_β.a)")
 
         keyword = first ? "if" : "elseif"
         println(io, "    $(keyword) $(join(conds, " && "))")
-        println(io, "        # <$(s_α.κ),r=$(s_α.r),a=$(s_α.a)| <- |$(s_β.κ),r=$(s_β.r),a=$(s_β.a)>")
+        println(io, "        # <$(s_α.κ),r=$(s_α.r)| <- |$(s_β.κ),r=$(s_β.r)>")
         println(io, "        return 0.0")
         first = false
     end

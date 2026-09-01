@@ -1,30 +1,30 @@
 # ============================================================
-# Projection — I 矩阵、Löwdin 正交化、不可约表示基展开
+# Projection — I matrices, Löwdin orthogonalization, and irrep-basis expansion
 # ============================================================
 #
-# 对每个子空间 S(n^r, λ, [κ]) 和目标群不可约表示 Γ：
-#   1. 构造 I 矩阵
-#   2. Löwdin 正交化 → 非零本征值 Z_r 和本征矢 c^r
-#   3. 展开为规范序动量态的线性组合 → 系数矩阵 X
+# For every subspace S(n^r, λ, [κ]) and target-group irrep Γ:
+#   1. Construct I matrix.
+#   2. Löwdin orthogonalization → nonzero eigenvalues Z_r and eigenvectors c^r
+#   3. Expand into linear combinations of canonically ordered momentum states → coefficient matrix X
 #
-# 约定：优先支持单物种（所有粒子全同），多物种留待后续推广。
+# Convention: prioritize single-species support (all particles identical); multi-species generalization follows below.
 
-# ============ 相位计算工具 ============
+# ============ Phase-calculation utilities ============
 
 """
     _total_particle_phase(n::Momentum, g::SMatrix{3,3,Int}, g_idx::Int, n_base::Int,
                           lambda::Float64, spin::Float64, eta_i::Float64, sign::Int=1)
                           -> (ComplexF64, Int)
 
-计算群元 g 作用在螺旋度态 |n,λ⟩ 上的总相位和螺旋度宇称 P(g)。
+Compute the total phase and helicity parity P(g) for group element g acting on helicity state |n,λ⟩.
 
-宇称通过群元索引判断（参见 _parity_of），g 矩阵仅用于计算 Wigner 角等相位。
-sign = ±1 区分双覆盖群的两个 SU(2) 提升（非双覆盖群始终为 1）。
-n_base 为基础 O(3) 群大小（双覆盖群为全群的一半）。
-eta_i 为该粒子的内禀宇称。
+Parity is determined from the group-element index (see _parity_of); g is used only for Wigner-angle and related phase calculations.
+sign = ±1 distinguishes the two SU(2) lifts of a double-cover group (and is always 1 for a single-cover group).
+n_base is the base O(3) group size (half the full group size for a double cover).
+eta_i is the intrinsic parity of this particle.
 
-- 固有旋转 (parity=+1): phase = e^{-iλ φ_w(n,g)}, P(g)=+1
-- 非固有旋转 (parity=-1): g = P·R, R=-g 为固有旋转
+- Proper rotation (parity=+1): phase = e^{-iλ φ_w(n,g)}, P(g)=+1
+- Improper rotation (parity=-1): g = P·R, R=-g is proper
   phase = e^{-iλ φ_w(n,R)} × η_i e^{∓iπs}, P(g)=-1
 """
 function _total_particle_phase(n::Momentum, g::SMatrix{3,3,Int},
@@ -35,7 +35,7 @@ function _total_particle_phase(n::Momentum, g::SMatrix{3,3,Int},
         phase = helicity_phase(n, g, lambda, sign)
         return phase, 1
     else
-        R = -g  # 固有部分，det(R)=+1
+        R = -g  # proper part, det(R)=+1
         h_phase = helicity_phase(n, R, lambda, sign)
         Rn = apply_transform(R, n)
         p_phase = _parity_helicity_phase(Rn, lambda, spin, eta_i)
@@ -46,8 +46,8 @@ end
 
 """ _total_state_phase(n_tuple, g, g_idx, n_base, lambda_tuple, spin, eta, sign=1) -> ComplexF64
 
-计算群元 g 对 N 粒子态的总相位：∏_i phase_i。
-sign = ±1 区分双覆盖群的两个 SU(2) 提升。
+Compute total phase of group element g on an N-particle state: ∏_i phase_i。
+sign = ±1 distinguishes the two SU(2) lifts of a double-cover group.
 """
 
 function _total_state_phase(n_tuple::NTuple{N,Momentum}, g::SMatrix{3,3,Int},
@@ -63,12 +63,12 @@ function _total_state_phase(n_tuple::NTuple{N,Momentum}, g::SMatrix{3,3,Int},
 end
 
 
-# ============ 置换工具 ============
+# ============ Permutation utilities ============
 
 """
     _permutation_sign(p::Vector{Int}) -> Int
 
-计算置换 p 的奇偶性（+1 偶, -1 奇），通过逆序数。
+Compute parity of permutation p (+1 even, -1 odd), from inversion count.
 """
 
 function _permutation_sign(p::Vector{Int})
@@ -85,14 +85,13 @@ function _permutation_sign(p::Vector{Int})
 end
 
 
-# ============ 螺旋度等价类工具 ============
+# ============ Helicity-equivalence-class utilities ============
 
 """
     _compute_per_single_species(n_tuple, group_elements, n_base)
 
-计算单物种情形的 Per({n}) 群生成元列表。
-每个生成元为 (parity::Int, inv_perm::Vector{Int})，
-等价关系: λ'_i = parity × λ[inv_perm[i]]。
+Compute the Per({n}) group-generator list. Each generator is (parity::Int, inv_perm::Vector{Int})，
+Equivalence relation: λ'_i = parity × λ[inv_perm[i]].
 """
 function _compute_per_single_species(n_tuple::NTuple{N,Momentum},
                                       group_elements::Vector{<:SMatrix{3,3,Int}},
@@ -127,8 +126,8 @@ end
 """
     _compute_helicity_equivalence_class(lambda_tuple, per_generators)
 
-通过 BFS 计算 lambda_tuple 在 Per 群生成元下的等价类。
-返回该类中所有螺旋度元组（含输入元组自身），并归一化 -0.0 → 0.0。
+Use BFS to compute lambda_tuple equivalence class under Per-group generators.
+Return all helicity tuples in this class (including input) and normalize -0.0 → 0.0.
 """
 function _compute_helicity_equivalence_class(lambda_tuple::NTuple{N,Float64},
                                               per_generators::Vector{Tuple{Int, Vector{Int}}}) where N
@@ -152,8 +151,53 @@ function _compute_helicity_equivalence_class(lambda_tuple::NTuple{N,Float64},
     return class
 end
 
+"""
+Geometry/helicity data shared by the ordinary single-species I and X builders.
+It is intentionally internal while the prepared-orbit API is validated before
+being extended to zero-momentum and multi-species paths.
+"""
+struct _PreparedProjectionOrbit{N}
+    lambda_class::Vector{NTuple{N,Float64}}
+    subspace_states::Vector{Tuple{NTuple{N,Momentum},NTuple{N,Float64}}}
+    state_ordinal::Dict{Tuple{NTuple{N,Momentum},NTuple{N,Float64}},Int}
+end
 
-# ============ I 矩阵 ============
+function _collect_subspace_states_from_class(
+        n_tuple::NTuple{N,Momentum},
+        lambda_class::Vector{NTuple{N,Float64}},
+        group_elements::Vector{<:SMatrix{3,3,Int}}, n_base::Int) where N
+    seen = Set{Tuple{NTuple{N,Momentum}, NTuple{N,Float64}}}()
+    for lam_src in lambda_class
+        for (g_idx, g) in enumerate(group_elements)
+            parity = _parity_of(g_idx, n_base)
+            trans_mom = [apply_transform(g, n_tuple[i]) for i in 1:N]
+            trans_hel = [parity * lam_src[i] for i in 1:N]
+            keys = collect(zip(trans_mom, trans_hel))
+            idx = sortperm(keys)
+            canon_mom = Tuple(trans_mom[i] for i in idx)
+            canon_hel = Tuple(trans_hel[i] == 0.0 ? 0.0 : trans_hel[i]
+                              for i in idx)
+            push!(seen, (canon_mom, canon_hel))
+        end
+    end
+    result = collect(seen)
+    sort!(result, by=x -> (collect(x[1]), collect(x[2])))
+    return result
+end
+
+function _prepare_projection_orbit(
+        n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
+        group_elements::Vector{<:SMatrix{3,3,Int}}, n_base::Int) where N
+    generators = _compute_per_single_species(n_tuple, group_elements, n_base)
+    lambda_class = _compute_helicity_equivalence_class(lambda_tuple, generators)
+    states = _collect_subspace_states_from_class(
+        n_tuple, lambda_class, group_elements, n_base)
+    state_ordinal = Dict(st => i for (i, st) in enumerate(states))
+    return _PreparedProjectionOrbit{N}(lambda_class, states, state_ordinal)
+end
+
+
+# ============ I matrix ============
 
 """
     build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
@@ -163,39 +207,43 @@ end
                    species_type::Symbol, spin::Float64, etas::Vector{Float64},
                    n_base::Int) where N -> Matrix{ComplexF64}
 
-构造子空间 S(n^r, λ, [κ]) 的 I 矩阵。
+Construct the I matrix of subspace S(n^r, λ, [κ]).
 
-公式:
+Formula:
   I_{(b,ν'),(a,ν)} = Σ_{g∈Per({n})} D*_{ν'ν}(g) × phase(g)
                      × Σ_{s∈S_N} δ(s) × R^{[κ]}_{ba}(s)
                      × Π_i δ_{n_{s_i}, g·n_i} × Π_i δ_{λ_{s_i}, P(g)·λ_i}
 
-其中 δ(s) 对费米子体系为置换奇偶性 sign(s)，对玻色子体系恒为 1。
-动量匹配：n_{s_i} = g·n_i；螺旋度匹配：λ_{s_i} = P(g)·λ_i。
-无需预计算稳定子，直接对全 S_N 求和，由 Kronecker δ 自然筛选。
+Here δ(s) is permutation parity sign(s) for fermionic systems and is always 1 for bosonic systems.
+Momentum matching: n_{s_i} = g·n_i；Helicity matching: λ_{s_i} = P(g)·λ_i。
+No stabilizer precomputation is required; sum directly over full S_N, with Kronecker δ providing the natural selection.
 
-I 矩阵大小: n_λ_class × dim([κ]) × dim(Γ) 的方阵。
-索引约定: 行/列 = (λ_idx, b, ν), 按列优先展平，λ 最快变。
+I matrix size: square matrix of dimension n_λ_class × dim([κ]) × dim(Γ).
+Index convention: row/column = (λ_idx, b, ν), flattened in column-major order, with λ varying fastest.
 
-λ 指标在螺旋度等价类上展开，使得螺旋度匹配退化为精确 Kronecker δ，
-从而正确包含非固有旋转（宇称）贡献。
+λ indices are expanded over the helicity equivalence class, making helicity matching an exact Kronecker δ and correctly including improper-rotation (parity) contributions.
 
-etas 为各物种单粒子内禀宇称向量（当前单物种支持 length(etas)==1）。
+etas is the vector of single-particle intrinsic parities for all species (current single-species support requires length(etas)==1).
 """
 function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
                          kappa::String, Gamma::String,
                          group_elements::Vector{<:SMatrix{3,3,Int}},
                          irrep_mats::Vector{<:AbstractMatrix},
                          species_type::Symbol, spin::Float64, etas::Vector{Float64},
-                         n_base::Int) where N
+                         n_base::Int; prepared_orbit=nothing) where N
     dim_kappa = get_SN_irrep_dim(N, kappa)
     dim_Gamma = size(irrep_mats[1], 1)
     orig_vec = collect(n_tuple)
     all_s = SN_ELEMENTS[N]
 
-    # 计算螺旋度等价类 — 在等价类上展开 λ 指标
-    per_generators = _compute_per_single_species(n_tuple, group_elements, n_base)
-    lambda_class = _compute_helicity_equivalence_class(lambda_tuple, per_generators)
+    # Compute helicity equivalence class — expand λ indices over that class.
+    lambda_class = if prepared_orbit === nothing
+        per_generators = _compute_per_single_species(
+            n_tuple, group_elements, n_base)
+        _compute_helicity_equivalence_class(lambda_tuple, per_generators)
+    else
+        prepared_orbit.lambda_class
+    end
     n_lam = length(lambda_class)
     lambda_to_idx = Dict(t => k for (k, t) in enumerate(lambda_class))
 
@@ -215,7 +263,7 @@ function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
         sign = g_idx > n_base ? -1 : 1
 
         for s in all_s
-            # 动量匹配: n_{s_i} = g·n_i
+            # Momentum matching: n_{s_i} = g·n_i
             mom_ok = true
             for i in 1:N
                 n_tuple[s[i]] != trans[i] && (mom_ok = false; break)
@@ -229,12 +277,12 @@ function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
             s_idx = get_SN_element_index(N, s)
             R_s = get_SN_irrep_matrix(N, kappa, s_idx)
 
-            # 遍历等价类中所有源螺旋度
+            # Traverse all source helicities in the equivalence class.
             for (src_idx, lam_src) in enumerate(lambda_class)
-                # 相位依赖源 λ（不同等价类成员可给不同相位）
+                # Phase depends on source λ (different equivalence-class members may have different phases).
                 state_phase = _total_state_phase(n_tuple, g, g_idx, n_base, lam_src, spin, etas[1], sign)
 
-                # 目标螺旋度: λ'_i = P(g)·λ_src[s^{-1}[i]]，必定在等价类内
+                # Target helicity: λ'_i = P(g)·λ_src[s^{-1}[i]], necessarily in the equivalence class.
                 lam_tgt_raw = ntuple(i -> parity * lam_src[inv_s[i]], N)
                 lam_tgt = Tuple(v == 0.0 ? 0.0 : Float64(v) for v in lam_tgt_raw)
                 tgt_idx = lambda_to_idx[lam_tgt]
@@ -257,12 +305,12 @@ function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
 end
 
 
-# ============ 多物种辅助函数 ============
+# ============ Multi-species helper functions ============
 
 """
     _is_within_species_permutation(p::Vector{Int}, species::Vector{Int}) -> Bool
 
-检查置换 p 是否仅在各个物种内部置换，不跨物种。
+Check whether permutation p acts only within each species and never across species.
 """
 function _is_within_species_permutation(p::Vector{Int}, species::Vector{Int})
     offset = 0
@@ -281,7 +329,7 @@ end
 """
     _compute_per_multi_species(n_tuple, group_elements, n_base, species)
 
-多物种版 Per 群生成元。与单物种版的区别：只考虑物种内置换。
+Multi-species Per-group generators. Unlike the single-species version, only within-species permutations are considered.
 """
 function _compute_per_multi_species(n_tuple::NTuple{N,Momentum},
                                      group_elements::Vector{<:SMatrix{3,3,Int}},
@@ -318,7 +366,7 @@ end
     _total_state_phase_multi(n_tuple, g, g_idx, n_base, lam_src,
                              per_particle_spins, per_particle_etas, sign) -> ComplexF64
 
-多物种总态相位：每粒子使用各自所属物种的 spin 和 eta。
+Multi-species total-state phase: every particle uses spin and eta of its own species.
 """
 function _total_state_phase_multi(n_tuple::NTuple{N,Momentum}, g::SMatrix{3,3,Int},
                                    g_idx::Int, n_base::Int,
@@ -340,7 +388,7 @@ end
     _multi_species_permutation_sign(s_full::Vector{Int}, species::Vector{Int},
                                      particle_types::Vector{Symbol}) -> Int
 
-多物种费米子置换符号：对每个费米子物种分别计算 sign(s|_k)，再相乘。
+Multi-species fermionic permutation sign: compute sign(s|_k) for each fermionic species and multiply them.
 """
 function _multi_species_permutation_sign(s_full::Vector{Int}, species::Vector{Int},
                                           particle_types::Vector{Symbol})
@@ -358,17 +406,17 @@ function _multi_species_permutation_sign(s_full::Vector{Int}, species::Vector{In
 end
 
 
-# ============ 多物种 I 矩阵 ============
+# ============ Multi-species I matrix ============
 
 """
     build_I_matrix(n_tuple, lambda_tuple, κ_tuple, Gamma,
                    group_elements, irrep_mats,
                    species, particle_types, spins, etas, n_base)
 
-多物种版 I 矩阵。与单物种版的核心区别：
-- 置换求和限制在直积群 S_{N₁}×⋯×S_{Nₖ} 内
-- R 矩阵为各物种 S_N irrep 的张量积
-- 每粒子 spin / eta 按所属物种独立
+Multi-species I matrix. Core differences from the single-species version:
+- Permutation sums are restricted to direct-product group S_{N₁}×⋯×S_{Nₖ}
+- R matrix is the tensor product of S_N irreps
+- per-particle spin / eta is determined independently by species
 """
 function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
                          κ_tuple, Gamma::String,
@@ -381,10 +429,10 @@ function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
     dim_Gamma = size(irrep_mats[1], 1)
     orig_vec = collect(n_tuple)
 
-    # 直积群元素 (替代 SN_ELEMENTS[N])
+    # Direct-product group elements (replacing SN_ELEMENTS[N])
     prod_gens = _product_group_generators(species)
 
-    # 每粒子 spin / eta 展开
+    # Expand per-particle spin / eta
     per_particle_spins = Float64[]
     per_particle_etas = Float64[]
     for (k, Nk) in enumerate(species)
@@ -394,7 +442,7 @@ function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
         end
     end
 
-    # 多物种 Per 群生成元 + 螺旋度等价类
+    # Multi-species Per-group generators + helicity equivalence class
     per_generators = _compute_per_multi_species(n_tuple, group_elements, n_base, species)
     lambda_class = _compute_helicity_equivalence_class(lambda_tuple, per_generators)
     n_lam = length(lambda_class)
@@ -415,7 +463,7 @@ function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
         for prod_gen in prod_gens
             s_full = prod_gen.s_full
 
-            # 动量匹配 δ
+            # Momentum matching δ
             mom_ok = true
             for i in 1:N
                 n_tuple[s_full[i]] != trans[i] && (mom_ok = false; break)
@@ -431,7 +479,7 @@ function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
                                                         lam_src, per_particle_spins,
                                                         per_particle_etas, sign)
 
-                # 目标螺旋度: λ'_i = P(g)·λ_{s^{-1}[i]}
+                # Target helicity: λ'_i = P(g)·λ_{s^{-1}[i]}
                 lam_tgt_raw = ntuple(i -> parity * lam_src[inv_s[i]], N)
                 lam_tgt = Tuple(v == 0.0 ? 0.0 : Float64(v) for v in lam_tgt_raw)
                 tgt_idx = lambda_to_idx[lam_tgt]
@@ -454,18 +502,20 @@ function build_I_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
 end
 
 
-# ============ 零动量 I 矩阵（新统一框架）============
+# ============ Zero-momentum I matrix (new unified framework)============
 
 """
     _spin_values(j::Rational{Int}) -> Vector{Rational{Int}}
 
-返回自旋 j 的所有投影值（从高到低）。
+Return all projections of spin j, from high to low.
 """
 function _spin_values(j::Rational{Int})
     if j == 1//2
         return Rational{Int}[1//2, -1//2]
     elseif j == 1//1
         return Rational{Int}[1//1, 0//1, -1//1]
+    elseif j == 3//2
+        return Rational{Int}[3//2, 1//2, -1//2, -3//2]
     else
         throw(ArgumentError("Unsupported spin j=$j"))
     end
@@ -474,8 +524,8 @@ end
 """
     _spin_tuples(j::Rational{Int}, M::Int) -> Vector{NTuple{M, Rational{Int}}}
 
-生成 M 个自旋 j 粒子的所有自旋投影组态 (σ₁,...,σ_M)，按字典序排列。
-σ 索引 = 1..(2j+1)^M。
+Generate all spin-projection configurations of M spin-j particles (σ₁,...,σ_M)，in lexicographic order.
+σ index = 1..(2j+1)^M。
 """
 function _spin_tuples(j::Rational{Int}, M::Int)
     vals = _spin_values(j)
@@ -497,12 +547,12 @@ end
 """
     _canonical_spin_tuples(j::Rational{Int}, M::Int) -> Vector{NTuple{M, Rational{Int}}}
 
-生成 M 个自旋 j 粒子的规范自旋组态（降序排列: σ₁ ≥ σ₂ ≥ ... ≥ σ_M）。
-去除 S_M 置换冗余，仅保留字典序最大的代表元。
+Generate canonical spin configurations of M spin-j particles（descending order: σ₁ ≥ σ₂ ≥ ... ≥ σ_M）。
+Remove S_M permutation redundancy and retain only the lexicographically largest representative.
 """
 function _canonical_spin_tuples(j::Rational{Int}, M::Int)
     M == 0 && return NTuple{0, Rational{Int}}[()]
-    vals = _spin_values(j)  # 已从高到低
+    vals = _spin_values(j)  # already high to low
     result = NTuple{M, Rational{Int}}[]
     current = Vector{Rational{Int}}(undef, M)
     function descend(pos, start)
@@ -512,23 +562,23 @@ function _canonical_spin_tuples(j::Rational{Int}, M::Int)
         end
         for k in start:length(vals)
             current[pos] = vals[k]
-            descend(pos + 1, k)  # k 允许等值
+            descend(pos + 1, k)  # k allows equal values
         end
     end
     descend(1, 1)
     return result
 end
 
-# 多物种自旋组态生成
+# Multi-species spin-configuration generation
 function _spin_values_float(spin::Float64)
     n = Int(2 * spin + 1)
-    return [Float64(spin - i) for i in 0:(n-1)]  # 降序，与 _spin_values 一致
+    return [Float64(spin - i) for i in 0:(n-1)]  # descending, consistent with _spin_values
 end
 
 function _multi_spin_tuples(zero_counts::Vector{Int}, spins::Vector{Float64})
     K = length(zero_counts)
     M_total = sum(zero_counts)
-    # 每个物种生成自己的自旋组态列表
+    # Generate its own spin-configuration list for each species.
     per_species_lists = Vector{Vector{Float64}}[]
     for k in 1:K
         species_tuples = Vector{Float64}[]
@@ -571,8 +621,8 @@ end
 """
     _sort_spin_descending(spin_tuple::NTuple{M, Rational{Int}}) -> (NTuple{M, Rational{Int}}, Vector{Int})
 
-将自旋组态排序为降序规范形，返回 (规范组态, 置换 p)。
-满足 canon[p[i]] == spin_tuple[i], i=1..M。
+Sort a spin configuration into descending canonical form and return (canonical configuration, permutation p).
+It satisfies canon[p[i]] == spin_tuple[i], i=1..M.
 """
 function _sort_spin_descending(spin_tuple::NTuple{M, Rational{Int}}) where M
     vals = collect(spin_tuple)
@@ -585,8 +635,8 @@ end
 """
     _SM_x_SNM_elements(N::Int, M::Int) -> Vector{Tuple{Int, Vector{Int}}}
 
-返回 S_M × S_{N-M} 子群中所有元素的 (索引, 置换向量) 列表。
-仅包含满足 s({1..M}) ⊆ {1..M} 且 s({M+1..N}) ⊆ {M+1..N} 的 s ∈ S_N。
+Return a list of (index, permutation vector) for all elements of subgroup S_M × S_{N-M}.
+Include only s ∈ S_N satisfying s({1..M}) ⊆ {1..M} and s({M+1..N}) ⊆ {M+1..N}.
 """
 function _SM_x_SNM_elements(N::Int, M::Int)
     result = Tuple{Int, Vector{Int}}[]
@@ -611,7 +661,7 @@ function _SM_x_SNM_elements(N::Int, M::Int)
     return result
 end
 
-# 多物种版本：∏_k (S_{M_k} × S_{N_k-M_k}) 元素
+# Multi-species version: ∏_k (S_{M_k} × S_{N_k-M_k}) elements
 function _multi_SM_SNM_elements(species::Vector{Int}, zero_counts::Vector{Int})
     K = length(species)
     N = sum(species)
@@ -643,8 +693,8 @@ end
 """
     _find_spin_stabilizer(spin_tuple::NTuple{M, Rational{Int}}) -> Vector{Vector{Int}}
 
-返回所有保持自旋组态不变的置换 s ∈ S_M，即满足 σ_{s_i} = σ_i, ∀i。
-等值自旋间的置换构成稳定子群。
+Return all permutations s ∈ S_M that preserve the spin configuration, satisfying σ_{s_i} = σ_i for all i.
+Permutations among equal spins form the stabilizer subgroup.
 """
 function _find_spin_stabilizer(spin_tuple::NTuple{M, Rational{Int}}) where M
     vals = collect(spin_tuple)
@@ -675,7 +725,7 @@ end
 """
     _rotation_axis_angle(R::Matrix{Float64}) -> (n, omega)
 
-从 3×3 旋转矩阵提取旋转轴 n（单位向量）和旋转角 ω ∈ [0, π]。
+Extract rotation axis n (unit vector) and angle ω ∈ [0, π] from a 3×3 rotation matrix.
 """
 function _rotation_axis_angle(R::AbstractMatrix{Float64})
     tr = R[1,1] + R[2,2] + R[3,3]
@@ -685,7 +735,7 @@ function _rotation_axis_angle(R::AbstractMatrix{Float64})
     if omega < 1e-12
         n = [0.0, 0.0, 1.0]
     elseif abs(omega - π) < 1e-10
-        # 180° 旋转: 轴从 (R+I)/2 提取
+        # 180° rotation: extract axis from (R+I)/2.
         RpI = R + I
         best = 0.0
         n = [0.0, 0.0, 1.0]
@@ -714,11 +764,13 @@ function _wigner_D_for_element(j::Rational{Int}, g_idx::Int, n_base::Int)
         D = SymmetryGroup._wigner_D_half(n, omega)
     elseif j == 1//1
         D = SymmetryGroup._wigner_D_one(n, omega)
+    elseif j == 3//2
+        D = SymmetryGroup._wigner_D_threehalf(n, omega)
     else
         throw(ArgumentError("Unsupported spin j=$j"))
     end
 
-    # Oh2 双覆盖：后半群元对半整数自旋取反号
+    # Oh2 Double cover: second-half elements flip sign for half-integer spin.
     if denominator(j) == 2 && g_idx > n_base
         D = -D
     end
@@ -729,21 +781,21 @@ end
 """
     _wigner_D_for_element(j, g::SMatrix{3,3,Int}, g_idx::Int, n_base::Int)
 
-从群元矩阵直接计算 Wigner D 矩阵，适用任意点群。
+Compute Wigner D matrices directly from group-element matrices, applicable to any point group.
 """
 function _wigner_D_for_element(j::Rational{Int}, g::SMatrix{3,3,Int},
                                g_idx::Int, n_base::Int)
-    # 提取正常转动部分: 非正常转动 g 可写为 -R，其中 R 为正常转动
+    # Extract proper-rotation part: improper rotation g can be written as -R, where R is proper.
     R_int = det(g) < 0 ? SMatrix{3,3,Int}(-g) : g
 
     if j == 1//2
-        # 使用 Oh 表的 SU(2) 提升，与 helicity_phase 一致
+        # Use SU(2) lift from Oh table, consistent with helicity_phase.
         D = SymmetryGroup._OH_PROPER_SU2[R_int]
     elseif j == 1//1
-        # 找到 R_int 在 Oh 表中的索引，使用一致的轴-角参数
+        # Find R_int index in Oh table and use consistent axis-angle arguments.
         R_idx = findfirst(x -> x == R_int, SymmetryGroup._OH_ALL[1:24])
         if R_idx === nothing
-            # fallback: 直接计算轴-角
+            # fallback: compute axis-angle directly
             R = Float64.(R_int)
             n, omega = _rotation_axis_angle(R)
             D = SymmetryGroup._wigner_D_one(n, omega)
@@ -751,11 +803,22 @@ function _wigner_D_for_element(j::Rational{Int}, g::SMatrix{3,3,Int},
             n, omega = SymmetryGroup._OH_ROTATION_PARAMS[R_idx]
             D = SymmetryGroup._wigner_D_one(n, omega)
         end
+    elseif j == 3//2
+        # Use the same axis-angle lift as the tabulated double-cover irreps.
+        R_idx = findfirst(x -> x == R_int, SymmetryGroup._OH_ALL[1:24])
+        if R_idx === nothing
+            R = Float64.(R_int)
+            n, omega = _rotation_axis_angle(R)
+            D = SymmetryGroup._wigner_D_threehalf(n, omega)
+        else
+            n, omega = SymmetryGroup._OH_ROTATION_PARAMS[R_idx]
+            D = SymmetryGroup._wigner_D_threehalf(n, omega)
+        end
     else
         throw(ArgumentError("Unsupported spin j=$j"))
     end
 
-    # 双覆盖：后半群元对半整数自旋取反号
+    # Double cover: second-half elements flip sign for half-integer spin.
     if denominator(j) == 2 && g_idx > n_base
         D = -D
     end
@@ -768,9 +831,9 @@ end
                                   group_elements, irrep_mats,
                                   species_type, spin, etas, n_base)
 
-构造含 M 个零动量粒子的子空间 I 矩阵（新统一框架）。
+Construct I matrix of a subspace with M zero-momentum particles (new unified framework).
 
-# 公式（zero_momentum_new.md Eq.15）
+# Formula (zero_momentum_new.md Eq.15)
 
 I_{(σ'₁..σ'_M; ν'; b), (σ₁..σ_M; ν; a)} =
   Σ_g D*_{ν'ν}(g) × phase(g) ×
@@ -780,18 +843,18 @@ I_{(σ'₁..σ'_M; ν'; b), (σ₁..σ_M; ν; a)} =
   R_{ba}(s) ×
   D^j_{σ'_{s₁},σ₁}(g) × ... × D^j_{σ'_{s_M},σ_M}(g)
 
-# 参数
-- `M`: 零动量粒子数（前 M 个粒子，n_tuple[1:M] 应为 0）
-- `j`: 单粒子自旋（1//2 或 1//1）
-- `n_tuple`: 所有 N 个粒子的代表动量
-- `lambda_tuple`: 所有 N 个粒子的螺旋度
-- `kappa`: S_N 不可约表示标签
-- `Gamma`: 目标 O_h 不可约表示（含宇称后缀）
-- 其余参数同 `build_I_matrix`
+# Arguments
+- `M`: number of zero-momentum particles (first M particles; n_tuple[1:M] must be zero)
+- `j`: single-particle spin (1//2, 1//1, or 3//2)
+- `n_tuple`: representative momenta of all N particles
+- `lambda_tuple`: helicities of all N particles
+- `kappa`: S_N irrep label
+- `Gamma`: target O_h irrep (with parity suffix)
+- Other parameters match `build_I_matrix`
 
-# I 矩阵维度
+# I matrixdimension
 d = (2j+1)^M × dim(Γ) × dim([κ])
-索引: row/col = σ_idx + nσ × (ν-1) + nσ × dim_Γ × (S_N_idx-1) [0-based → +1]
+index: row/col = σ_idx + nσ × (ν-1) + nσ × dim_Γ × (S_N_idx-1) [0-based → +1]
 """
 function build_I_matrix_zero_momentum(M::Int, j::Rational{Int},
                                        n_tuple::NTuple{N, Momentum},
@@ -804,21 +867,21 @@ function build_I_matrix_zero_momentum(M::Int, j::Rational{Int},
                                        n_base::Int) where {N}
     dim_kappa = get_SN_irrep_dim(N, kappa)
     dim_Gamma = size(irrep_mats[1], 1)
-    nσ = Int((2j + 1)^M)           # 零动量自旋组态数
-    d = nσ * dim_Gamma * dim_kappa  # I 矩阵总维度
+    nσ = Int((2j + 1)^M)           # number of zero-momentum spin configurations
+    d = nσ * dim_Gamma * dim_kappa  # total I-matrix dimension
 
     I = zeros(ComplexF64, d, d)
-    d == 0 && return I  # M=0 且 j 无效时
+    d == 0 && return I  # when M=0 and j is invalid
 
-    # 预计算自旋组态列表及 spin value → matrix index 映射
+    # Precompute spin-configuration list and spin-value → matrix-index map.
     spin_tuples = _spin_tuples(j, M)
     spin_vals = _spin_values(j)
     spin_to_idx = Dict{Rational{Int}, Int}(v => k for (k, v) in enumerate(spin_vals))
 
-    # S_M × S_{N-M} 子群元素
+    # S_M × S_{N-M} subgroup elements
     sm_snm = _SM_x_SNM_elements(N, M)
 
-    # 预计算所有群元的 Wigner D 矩阵
+    # Precompute Wigner D matrices for all group elements.
     wigner_Ds = [_wigner_D_for_element(j, group_elements[g_idx], g_idx, n_base) for g_idx in 1:length(group_elements)]
 
     fermion = (species_type == :fermion)
@@ -826,7 +889,7 @@ function build_I_matrix_zero_momentum(M::Int, j::Rational{Int},
     eta_val = etas[1]
 
     for (g_idx, g) in enumerate(group_elements)
-        # 预筛选：有限动量集在 g 下不变
+        # Prefilter: finite-momentum set is invariant under g.
         trans = [apply_transform(g, n_tuple[i]) for i in 1:N]
         if sort(orig_vec) != sort(trans)
             continue
@@ -837,7 +900,7 @@ function build_I_matrix_zero_momentum(M::Int, j::Rational{Int},
         sign = g_idx > n_base ? -1 : 1
         Dj_g = wigner_Ds[g_idx]  # D^j(g) for zero-momentum spin rotation
 
-        # 有限动量粒子相位
+        # Finite-momentum particle phases.
         fin_phase = ComplexF64(1.0, 0.0)
         for i in (M + 1):N
             phase_i, _ = _total_particle_phase(n_tuple[i], g, g_idx, n_base,
@@ -845,30 +908,30 @@ function build_I_matrix_zero_momentum(M::Int, j::Rational{Int},
             fin_phase *= phase_i
         end
 
-        # 零动量粒子内禀宇称（仅非固有群元贡献）
+        # Zero-momentum particle intrinsic parity (only improper elements contribute).
         if parity == -1
             fin_phase *= Float64(eta_val)^M
         end
 
         abs(fin_phase) < 1e-14 && continue
 
-        # 遍历 S_M × S_{N-M} 子群
+        # Traverse S_M × S_{N-M} subgroup
         for (s_idx, s) in sm_snm
-            # 有限动量匹配: n_{s_i} = g·n_i, i=M+1..N
+            # Finite-momentum matching: n_{s_i} = g·n_i, i=M+1..N
             mom_ok = true
             for i in (M + 1):N
                 n_tuple[s[i]] != trans[i] && (mom_ok = false; break)
             end
             mom_ok || continue
 
-            # 螺旋度匹配: λ_{s_i} = P(g)·λ_i, i=M+1..N
+            # Helicity matching: λ_{s_i} = P(g)·λ_i, i=M+1..N
             hel_ok = true
             for i in (M + 1):N
                 lambda_tuple[s[i]] != parity * lambda_tuple[i] && (hel_ok = false; break)
             end
             hel_ok || continue
 
-            # 费米子置换符号
+            # Fermionic permutation sign.
             fermion_sign = fermion ? _permutation_sign(s) : 1
             if fermion_sign == 0
                 continue  # shouldn't happen, but safety
@@ -876,7 +939,7 @@ function build_I_matrix_zero_momentum(M::Int, j::Rational{Int},
 
             R_s = get_SN_irrep_matrix(N, kappa, s_idx)
 
-            # 遍历所有指标
+            # Traverseall indices
             for a in 1:dim_kappa, b in 1:dim_kappa
                 R_ba = R_s[b, a]
                 abs(R_ba) < 1e-14 && continue
@@ -887,7 +950,7 @@ function build_I_matrix_zero_momentum(M::Int, j::Rational{Int},
                     abs(Dstar) < 1e-14 && continue
                     g_factor = Dstar * fin_phase * sN_factor
 
-                    # 自旋指标: σ' 行，σ 列
+                    # Spin indices: σ' row, σ column.
                     for sigma_idx in 1:nσ, sigmap_idx in 1:nσ
                         # D-product: Π_{i=1}^{M} D^j_{σ'_{s_i}, σ_i}(g)
                         dp = ComplexF64(1.0, 0.0)
@@ -911,7 +974,7 @@ function build_I_matrix_zero_momentum(M::Int, j::Rational{Int},
     return I
 end
 
-# 多物种版本
+# Multi-species version
 function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
                                        n_tuple::NTuple{N, Momentum},
                                        lambda_tuple::NTuple{N, Float64},
@@ -928,14 +991,14 @@ function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
     M_total = sum(zero_counts)
     K = length(species)
 
-    # 多物种自旋组态
+    # Multi-species spin configurations
     spin_tuples = _multi_spin_tuples(zero_counts, spins)
     nσ = length(spin_tuples)
     d = nσ * dim_Gamma * dim_kappa
     I = zeros(ComplexF64, d, d)
     d == 0 && return I
 
-    # 全局 ZM 位置 → 本地 ZM 索引
+    # Global ZM positions → local ZM indices
     zm_global_positions = Int[]
     zm_global_to_local = Dict{Int, Int}()
     for (k, Nk) in enumerate(species)
@@ -947,7 +1010,7 @@ function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
         end
     end
 
-    # 每 ZM 粒子（本地序）的物种标签
+    # Species labels of ZM particles (local order)
     zero_particle_species = Int[]
     for (k, mk) in enumerate(zero_counts)
         for _ in 1:mk
@@ -955,7 +1018,7 @@ function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
         end
     end
 
-    # 每物种的 Wigner D 矩阵（仅 spin≠0 的物种需要）
+    # Wigner D matrix of each species (needed only for species with spin≠0)
     wigner_Ds_by_species = Dict{Int, Vector{Matrix{ComplexF64}}}()
     spin_to_dj_by_species = Dict{Int, Dict{Float64, Int}}()
     for k in 1:K
@@ -968,10 +1031,10 @@ function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
         end
     end
 
-    # ∏_k (S_{M_k} × S_{N_k-M_k}) 子群元素
+    # ∏_k (S_{M_k} × S_{N_k-M_k}) subgroup elements
     sm_snm = _multi_SM_SNM_elements(species, zero_counts)
 
-    # 每粒子 spin / eta
+    # Per-particle spin / eta
     per_particle_spins = Float64[]
     per_particle_etas = Float64[]
     for (k, Nk) in enumerate(species)
@@ -991,7 +1054,7 @@ function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
         D_g = irrep_mats[g_idx]
         sign = g_idx > n_base ? -1 : 1
 
-        # 仅 FM 粒子相位 + ZM 内禀宇称（与单物种版一致）
+        # FM-particle phases + ZM intrinsic parity (consistent with single-species version)
         fm_phase = ComplexF64(1.0, 0.0)
         for i in 1:N
             iszero(n_tuple[i]) && continue
@@ -1009,7 +1072,7 @@ function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
         abs(state_phase) < 1e-14 && continue
 
         for (s_full, per_s_idx) in sm_snm
-            # 动量匹配：对于全局位置 i，检验 ZM/FM 状态一致且 FM 动量相等
+            # Momentum matching: at global position i, verify matching ZM/FM status and equal FM momenta
             mom_ok = true
             for i in 1:N
                 nzi = iszero(n_tuple[i])
@@ -1019,7 +1082,7 @@ function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
             end
             mom_ok || continue
 
-            # 螺旋度匹配（仅有限动量粒子）
+            # Helicity matching（finite-momentum particles only）
             hel_ok = true
             for i in 1:N
                 iszero(n_tuple[i]) && continue
@@ -1068,24 +1131,23 @@ function build_I_matrix_zero_momentum(zero_counts::Vector{Int},
 end
 
 
-# ============ Löwdin 正交化 ============
+# ============ Löwdin orthogonalization ============
 
 """
-    lowdin_orthogonalize(I::Matrix{ComplexF64}; tol::Float64=1e-12)
+    lowdin_orthogonalize(I::Matrix{ComplexF64}; tol::Float64=1e-10)
         -> (Z::Vector{Float64}, C::Matrix{ComplexF64}, nonzero_indices::Vector{Int},
             all_evals::Vector{Float64})
 
-对角化厄米矩阵 I，返回非零本征值 Z_r、对应本征矢（C 的列）、非零本征值序号、
-以及全部本征值（供调用方诊断，避免重复特征分解）。
+Diagonalize Hermitian matrix I and return nonzero eigenvalues Z_r, corresponding eigenvectors (columns of C), indices of nonzero eigenvalues, and all eigenvalues for caller diagnostics without repeated eigendecomposition.
 
-I 矩阵理论上幂等（up to 常数），本征值应为正整数 Z_r。
+I matrixis theoretically idempotent up to a constant; eigenvalues should be positive integers Z_r.
 """
-function lowdin_orthogonalize(I::Matrix{ComplexF64}; tol::Float64=1e-12)
-    # 厄米对角化
+function lowdin_orthogonalize(I::Matrix{ComplexF64}; tol::Float64=1e-10)
+    # Hermitian diagonalization
     evals, evecs = eigen(Hermitian(I))
     all_evals = Float64.(evals)
 
-    # 筛选非零本征值（相对容差避免数值噪声误判）
+    # Select nonzero eigenvalues (relative tolerance avoids numerical-noise misclassification).
     max_ev = maximum(abs, evals)
     threshold = max(tol, max_ev * 1e-12)
 
@@ -1102,13 +1164,13 @@ function lowdin_orthogonalize(I::Matrix{ComplexF64}; tol::Float64=1e-12)
         return Float64[], Matrix{ComplexF64}(undef, size(I,1), 0), Int[], all_evals
     end
 
-    Z = Float64.(evals[nonzero_idx])  # 应为正整数（理论保证）
-    C = evecs[:, nonzero_idx]         # 对应本征矢
+    Z = Float64.(evals[nonzero_idx])  # should be positive integers (theoretical guarantee)
+    C = evecs[:, nonzero_idx]         # corresponding eigenvectors
 
     return Z, C, nonzero_idx, all_evals
 end
 
-# ============ 不可约表示基展开（X 矩阵）============
+# ============ Irrep-basis expansion (X matrix)============
 
 """
     _collect_subspace_states(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
@@ -1116,40 +1178,22 @@ end
                              spin::Float64, eta::Float64, n_base::Int) where N
         -> Vector{Tuple{NTuple{N,Momentum}, NTuple{N,Float64}}}
 
-收集子空间中所有互异的规范序动量-螺旋度态。
-遍历等价类中所有 λ 和所有 g ∈ G，计算 (canonical_momenta, canonical_helicities)，去重排序。
-n_base 为基础 O(3) 群大小，用于宇称判断。
+Collect all distinct canonically ordered momentum-helicity states in the subspace.
+Traverse all λ in the equivalence class and all g ∈ G, compute (canonical_momenta, canonical_helicities), then deduplicate and sort.
+n_base is the base O(3) group size，for parity determination.
 """
 function _collect_subspace_states(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
                                    group_elements::Vector{<:SMatrix{3,3,Int}},
                                    spin::Float64, eta::Float64, n_base::Int) where N
-    # 计算螺旋度等价类，在所有等价 λ 上展开
+    # Compute helicity equivalence class，expanded over all equivalent λ
     per_generators = _compute_per_single_species(n_tuple, group_elements, n_base)
     lambda_class = _compute_helicity_equivalence_class(lambda_tuple, per_generators)
 
-    seen = Set{Tuple{NTuple{N,Momentum}, NTuple{N,Float64}}}()
-    for lam_src in lambda_class
-        for (g_idx, g) in enumerate(group_elements)
-            parity = _parity_of(g_idx, n_base)
-            trans_mom = [apply_transform(g, n_tuple[i]) for i in 1:N]
-            trans_hel = [parity * lam_src[i] for i in 1:N]
-
-            # 排序为规范序：先动量后螺旋度，确保等动量时规范形唯一
-            keys = collect(zip(trans_mom, trans_hel))
-            idx = sortperm(keys)
-            canon_mom = Tuple(trans_mom[i] for i in idx)
-            # 归一化 -0.0 → 0.0，避免 Set 重复
-            canon_hel = Tuple(trans_hel[i] == 0.0 ? 0.0 : trans_hel[i] for i in idx)
-            push!(seen, (canon_mom, canon_hel))
-        end
-    end
-
-    result = collect(seen)
-    sort!(result, by = x -> (collect(x[1]), collect(x[2])))
-    return result
+    return _collect_subspace_states_from_class(
+        n_tuple, lambda_class, group_elements, n_base)
 end
 
-# 多物种版本：每个物种内部分别排序，保证规范序中物种边界不被打乱
+# Multi-species version: sort separately within every species to preserve species boundaries in canonical order
 function _collect_subspace_states(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
                                    group_elements::Vector{<:SMatrix{3,3,Int}},
                                    species::Vector{Int}, spins::Vector{Float64},
@@ -1164,7 +1208,7 @@ function _collect_subspace_states(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTu
             trans_mom = [apply_transform(g, n_tuple[i]) for i in 1:N]
             trans_hel = [parity * lam_src[i] for i in 1:N]
 
-            # 每个物种内部独立排序，保证物种边界不变
+            # sort independently within each species, preserving species boundaries
             canon_mom = Momentum[]
             canon_hel = Float64[]
             off = 0
@@ -1190,8 +1234,8 @@ end
 """
     _collect_fin_subspace_states(fin_n_tuple, fin_lam_tuple, group_elements, spin, eta, n_base)
 
-收集有限动量粒子(N-M 个）的子空间中所有规范序态。
-用于零动量 X 矩阵构建时的有限动量分块。
+Collect all canonically ordered subspace states of finite-momentum particles (N-M particles).
+Used as finite-momentum blocks when constructing the zero-momentum X matrix.
 """
 function _collect_fin_subspace_states(fin_n_tuple::NTuple{Nfm, Momentum},
                                       fin_lam_tuple::NTuple{Nfm, Float64},
@@ -1213,7 +1257,7 @@ function _collect_fin_subspace_states(fin_n_tuple::NTuple{Nfm, Momentum},
     return result
 end
 
-# 多物种版本：每个物种内部分别排序
+# Multi-species version: sort independently within each species.
 function _collect_fin_subspace_states(fin_n_tuple::NTuple{Nfm, Momentum},
                                        fin_lam_tuple::NTuple{Nfm, Float64},
                                        group_elements, fin_species::Vector{Int},
@@ -1225,7 +1269,7 @@ function _collect_fin_subspace_states(fin_n_tuple::NTuple{Nfm, Momentum},
         parity = _parity_of(g_idx, n_base)
         trans_mom = [apply_transform(g, fin_n_tuple[i]) for i in 1:Nfm]
         trans_hel = [parity * fin_lam_tuple[i] for i in 1:Nfm]
-        # 每个物种内部排序
+        # Sort within each species.
         canon_mom_arr = Momentum[]
         canon_hel_arr = Float64[]
         off = 0
@@ -1254,41 +1298,50 @@ end
                    species_type::Symbol, spin::Float64, etas::Vector{Float64},
                    n_base::Int, Z::Vector{Float64}, C::Matrix{ComplexF64}) where N -> Matrix{ComplexF64}
 
-从 I 矩阵非零本征矢 c^r 出发，构造系数矩阵 X。
+Construct coefficient matrix X from nonzero I-matrix eigenvectors c^r.
 
-I 矩阵在螺旋度等价类上展开（λ 指标为等价类内成员索引），
-C 矩阵的行索引约定与 I 矩阵一致: (λ_idx, b, ν) 按列优先展平。
+The I matrix is expanded over the helicity equivalence class, with λ indexing members of that class.
+The row-index convention of C matches that of the I matrix: (λ_idx, b, ν), flattened in column-major order.
 
-公式:
+Formula:
   |Γ, r⟩ = √(dimΓ / (|G|·Z_r)) × Σ_{λ,b,ν} c^r_{λ,b,ν}
               × Σ_{g∈G} D^{*}_{1,ν}(g) × phase(g; λ)
               × Σ_p δ(p) × R_{b'b}(p) × |{n'}, λ'; b'⟩
 
-其中 p 是将 (g·n) 排序为规范序 {n'} 的置换，λ'_i = P(g) λ_{p̄_i}。
-n_base 为基础 O(3) 群大小，用于宇称和 SU(2) 提升符号；|G| 为全群大小。
+Here p is the permutation that sorts (g·n) into canonical order {n'}, and λ'_i = P(g) λ_{p̄_i}.
+n_base is the size of the base O(3) group and is used for parity and SU(2)-lift signs; |G| is the full group size.
 
-X 矩阵: 行 = 规范基态 (n', λ', b'),
-       列 = r，共 n_r 列
+X matrix: rows are canonical basis states (n', λ', b'); columns are r, for a total of n_r columns.
 
-etas 为各物种单粒子内禀宇称向量（当前单物种支持 length(etas)==1）。
+
+etas is the vector of single-particle intrinsic parities for all species (current single-species support requires length(etas)==1).
 """
 function build_X_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
                          kappa::String, Gamma::String,
                          group_elements::Vector{<:SMatrix{3,3,Int}},
                          irrep_mats::Vector{<:AbstractMatrix},
                          species_type::Symbol, spin::Float64, etas::Vector{Float64},
-                         n_base::Int, Z::Vector{Float64}, C::Matrix{ComplexF64}) where N
+                         n_base::Int, Z::Vector{Float64}, C::Matrix{ComplexF64};
+                         prepared_orbit=nothing) where N
     dim_kappa = get_SN_irrep_dim(N, kappa)
     dim_Gamma = size(irrep_mats[1], 1)
     nG = length(group_elements)
 
-    # 螺旋度等价类（与 build_I_matrix 一致）
-    per_generators = _compute_per_single_species(n_tuple, group_elements, n_base)
-    lambda_class = _compute_helicity_equivalence_class(lambda_tuple, per_generators)
+    # Helicity equivalence class (consistent with build_I_matrix).
+    lambda_class = if prepared_orbit === nothing
+        per_generators = _compute_per_single_species(
+            n_tuple, group_elements, n_base)
+        _compute_helicity_equivalence_class(lambda_tuple, per_generators)
+    else
+        prepared_orbit.lambda_class
+    end
     n_lam = length(lambda_class)
 
-    # 收集子空间中所有规范序态（在所有等价 λ 上展开）
-    subspace_states = _collect_subspace_states(n_tuple, lambda_tuple, group_elements, spin, etas[1], n_base)
+    # Collect all canonical subspace states, expanded over all equivalent λ.
+    subspace_states = prepared_orbit === nothing ?
+        _collect_subspace_states_from_class(
+            n_tuple, lambda_class, group_elements, n_base) :
+        prepared_orbit.subspace_states
     n_states = length(subspace_states)
     subspace_dim = n_states * dim_kappa
 
@@ -1296,12 +1349,11 @@ function build_X_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
     X = zeros(ComplexF64, subspace_dim, n_r)
     n_r == 0 && return X
 
-    state_index = Dict{Tuple{NTuple{N,Momentum}, NTuple{N,Float64}}, Int}()
-    for (k, st) in enumerate(subspace_states)
-        state_index[st] = (k - 1) * dim_kappa + 1
-    end
+    state_ordinal = prepared_orbit === nothing ?
+        Dict(st => i for (i, st) in enumerate(subspace_states)) :
+        prepared_orbit.state_ordinal
 
-    # 遍历所有 g ∈ G 和所有源螺旋度
+    # Traverse all g ∈ G and all source helicities.
     for (g_idx, g) in enumerate(group_elements)
         parity = _parity_of(g_idx, n_base)
         sign = g_idx > n_base ? -1 : 1
@@ -1311,15 +1363,16 @@ function build_X_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
             trans_mom = [apply_transform(g, n_tuple[i]) for i in 1:N]
             trans_hel = [parity * lam_src[i] for i in 1:N]
 
-            # 排序为规范序
+            # Sort into canonical order.
             keys_g = collect(zip(trans_mom, trans_hel))
             idx_sorted = sortperm(keys_g)
             canon_mom = Tuple(trans_mom[i] for i in idx_sorted)
             canon_hel = Tuple(trans_hel[i] == 0.0 ? 0.0 : trans_hel[i] for i in idx_sorted)
 
             canon_key = (canon_mom, canon_hel)
-            !haskey(state_index, canon_key) && continue
-            row_base = state_index[canon_key]
+            state_idx = get(state_ordinal, canon_key, 0)
+            state_idx == 0 && continue
+            row_base = (state_idx - 1) * dim_kappa + 1
 
             orig_vec = collect(canon_mom)
             all_perms = _find_all_permutations(orig_vec, trans_mom)
@@ -1346,7 +1399,7 @@ function build_X_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
                 norm_factor = sqrt(dim_Gamma / (nG * Z_r))
 
                 for b in 1:dim_kappa, nu in 1:dim_Gamma
-                    # C 索引: (src_idx-1)*dim_kappa*dim_Gamma + (b-1)*dim_Gamma + nu
+                    # C index: (src_idx-1)*dim_kappa*dim_Gamma + (b-1)*dim_Gamma + nu
                     c_idx = (src_idx - 1) * dim_kappa * dim_Gamma + (b - 1) * dim_Gamma + nu
                     c_bnu = C[c_idx, r]
                     abs(c_bnu) < 1e-14 && continue
@@ -1368,7 +1421,7 @@ function build_X_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
     return X
 end
 
-# 多物种版本
+# Multi-species version
 function build_X_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
                          κ_tuple, Gamma::String,
                          group_elements::Vector{<:SMatrix{3,3,Int}},
@@ -1416,7 +1469,7 @@ function build_X_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
             trans_mom = [apply_transform(g, n_tuple[i]) for i in 1:N]
             trans_hel = [parity * lam_src[i] for i in 1:N]
 
-            # 每个物种内部独立排序，与 _collect_subspace_states 一致
+            # Sort independently within each species, consistent with _collect_subspace_states.
             canon_mom_arr = Momentum[]
             canon_hel_arr = Float64[]
             off = 0
@@ -1441,7 +1494,7 @@ function build_X_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
             all_perms = _find_all_permutations(orig_vec, trans_mom)
             found_p = nothing
             for p in all_perms
-                # 只接受物种内置换
+                # Accept only within-species permutations.
                 _is_within_species_permutation(p, species) || continue
                 hel_ok = true
                 for i in 1:N
@@ -1486,7 +1539,7 @@ function build_X_matrix(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Floa
     return X
 end
 
-# ============ 零动量 X 矩阵 ============
+# ============ Zero-momentum X matrix ============
 
 """
     build_X_matrix_zero_momentum(M, j, n_tuple, lambda_tuple, kappa, Gamma,
@@ -1494,28 +1547,28 @@ end
                                   species_type, spin, etas, n_base,
                                   Z, C) -> Matrix{ComplexF64}
 
-从含 M 个零动量粒子的 I 矩阵非零本征矢 c^r 出发，构造系数矩阵 X。
+Construct coefficient matrix X from nonzero I-matrix eigenvectors c^r for a subspace with M zero-momentum particles.
 
-# 公式（zero_momentum_new.md Eq.25-31）
+# Formula (zero_momentum_new.md Eq.25-31)
 
 |Γ, r⟩ = √(dimΓ/(|G|·Z_r)) × Σ_{σ,ν,b} Σ_{g∈G} (c^r)_{σ,ν,b} × D^{Γ*}_{1,ν}(g)
-         × (有限动量螺旋度相位) × (内禀宇称 η^M)
+         × (finite-momentum helicity phase) × (intrinsic parity η^M)
          × Σ_{σ'} D^j_{σ'₁,σ₁}(g) × ... × D^j_{σ'_M,σ_M}(g)
          × |σ', {g·n, P(g)λ}; b⟩
 
-规范基态: |σ'_canon, {n'_canon, λ'_canon}; b'⟩
-其中 σ'_canon 为降序排列，{n'_canon, λ'_canon} 为有限动量规范序。
+canonical basis state: |σ'_canon, {n'_canon, λ'_canon}; b'⟩
+Here σ'_canon is in descending canonical order, and {n'_canon, λ'_canon} is in canonical order for finite momenta.
 
-X 矩阵: 行 = (σ'_canon, n'_canon, λ'_canon, b')
-       列 = r，共 n_r 列，μ=1
+X matrix: row = (σ'_canon, n'_canon, λ'_canon, b'); columns = r, with n_r columns and μ=1.
+       columns = r，with n_r columns，μ=1
 
-# 参数
-- `M`: 零动量粒子数（前 M 个粒子）
-- `j`: 单粒子自旋（1//2 或 1//1）
-- `n_tuple`, `lambda_tuple`: N 粒子动量/螺旋度代表元
-- `kappa`, `Gamma`: S_N / 点群不可约表示标签
-- `Z`: I 矩阵非零本征值
-- `C`: I 矩阵非零本征矢矩阵，C[:, r] 按 (b, ν, σ) 展平（σ 最快变）
+# Arguments
+- `M`: number of zero-momentum particles (first M particles)
+- `j`: single-particle spin (1//2, 1//1, or 3//2)
+- `n_tuple`, `lambda_tuple`: N N-particle momentum/helicity representative
+- `kappa`, `Gamma`: S_N / point-group irrep label
+- `Z`: I matrixnonzero eigenvalues
+- C: nonzero I-matrix eigenvector matrix; C[:, r] is flattened as (b, ν, σ), with σ varying fastest.
 """
 function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
                                        n_tuple::NTuple{N, Momentum},
@@ -1533,7 +1586,7 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
     nG = length(group_elements)
     n_r = length(Z)
 
-    # 自旋组态
+    # Spin configurations.
     all_spin_tuples = _spin_tuples(j, M)
     nσ = length(all_spin_tuples)
 
@@ -1549,14 +1602,14 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
         end
     end
 
-    # Wigner D 矩阵
+    # Wigner D matrices.
     wigner_Ds = [_wigner_D_for_element(j, group_elements[g_idx], g_idx, n_base) for g_idx in 1:nG]
 
-    # 自旋值 → D 矩阵索引
+    # Spin value → D-matrix index.
     spin_vals = _spin_values(j)
     spin_to_dj = Dict(v => k for (k, v) in enumerate(spin_vals))
 
-    # 有限动量子空间态
+    # Finite-momentum subspace states.
     fin_n = ntuple(i -> n_tuple[M + i], N - M)
     fin_lam = ntuple(i -> lambda_tuple[M + i], N - M)
     fin_states = _collect_fin_subspace_states(fin_n, fin_lam, group_elements, spin, etas[1], n_base)
@@ -1567,7 +1620,7 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
         fin_state_to_rowbase[st] = (k - 1) * dim_kappa + 1
     end
 
-    # X 矩阵行维度
+    # X-matrix row dimension.
     nσ_row = canonical_spin ? length(_canonical_spin_tuples(j, M)) : nσ
     row_dim = nσ_row * n_fin * dim_kappa
     X = zeros(ComplexF64, row_dim, n_r)
@@ -1582,20 +1635,20 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
         Dg_Gamma = irrep_mats[g_idx]
         Dj_g = wigner_Ds[g_idx]
 
-        # 有限动量粒子相位（螺旋度 + e^{∓iπs} + 内禀宇称）
+        # Finite-momentum particle phases (helicity + e^{∓iπs} + intrinsic parity).
         fin_phase = ComplexF64(1.0, 0.0)
         for i in (M + 1):N
             phase_i, _ = _total_particle_phase(n_tuple[i], g, g_idx, n_base,
                                                 lambda_tuple[i], spin, eta_val, sign)
             fin_phase *= phase_i
         end
-        # 零动量粒子内禀宇称
+        # Intrinsic parity of zero-momentum particles.
         if parity == -1
             fin_phase *= Float64(eta_val)^M
         end
         abs(fin_phase) < 1e-14 && continue
 
-        # 变换有限动量/螺旋度并规范排序
+        # Transform finite momenta/helicities and sort canonically.
         Nfm = N - M
         trans_fin_mom = [apply_transform(g, n_tuple[i]) for i in (M + 1):N]
         trans_fin_hel = [parity * lambda_tuple[i] for i in (M + 1):N]
@@ -1623,12 +1676,12 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
             end
             found_p_fin === nothing && continue
         else
-            # M == N: 无有限动量粒子
+            # M == N: no finite-momentum particles
             fin_row_base = 1
             found_p_fin = Int[]
         end
 
-        # 遍历自旋指标
+        # Traversespin indices
         for sigma_idx in 1:nσ
             sigma = all_spin_tuples[sigma_idx]
 
@@ -1643,11 +1696,11 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
                 abs(Dprod) < 1e-14 && continue
 
                 if canonical_spin
-                    # σ' 排序为降序规范形
+                    # σ' sort into descending canonical form
                     sigmap_canon, p_spin = spin_canon_info[sigmap]
                     σ_canon_idx = canon_spin_to_idx[sigmap_canon]
 
-                    # 合成全置换 p_total ∈ S_M × S_{N-M} ⊂ S_N
+                    # Construct full permutation p_total ∈ S_M × S_{N-M} ⊂ S_N
                     p_total = Vector{Int}(undef, N)
                     for i in 1:M
                         p_total[i] = p_spin[i]
@@ -1662,8 +1715,8 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
 
                     σ_row_base = (σ_canon_idx - 1) * n_fin * dim_kappa
                 else
-                    # 非对称化基: 自旋不排序，σ' 各自保留独立行
-                    # p_total: ZM 自旋部分为恒等置换
+                    # Unsymmetrized basis: spins are not sorted，σ' each retains an independent row
+                    # p_total: identity permutation in the ZM-spin sector.
                     p_total = Vector{Int}(undef, N)
                     for i in 1:M
                         p_total[i] = i
@@ -1679,14 +1732,14 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
                     σ_row_base = (sigmap_idx - 1) * n_fin * dim_kappa
                 end
 
-                # 遍历 S_N 和 Γ 指标
+                # Traverse S_N and Γ indices.
                 for a in 1:dim_kappa
-                    for b in 1:dim_kappa  # b' — 输出 S_N 指标
+                    for b in 1:dim_kappa  # b' — output S_N index
                         R_ba = R_p[b, a]
                         abs(R_ba) < 1e-14 && continue
 
                         for nu in 1:dim_Gamma
-                            # C 的行索引: (a-1)*dimΓ*nσ + (nu-1)*nσ + sigma_idx
+                            # C row index: (a-1)*dimΓ*nσ + (nu-1)*nσ + sigma_idx.
                             c_idx = (a - 1) * dim_Gamma * nσ + (nu - 1) * nσ + sigma_idx
 
                             for r in 1:n_r
@@ -1711,7 +1764,7 @@ function build_X_matrix_zero_momentum(M::Int, j::Rational{Int},
     return X
 end
 
-# 多物种版本
+# Multi-species version
 function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
                                        n_tuple::NTuple{N,Momentum},
                                        lambda_tuple::NTuple{N,Float64},
@@ -1732,11 +1785,11 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
     M_total = sum(zero_counts)
     Nfm = N - M_total
 
-    # 多物种自旋组态
+    # Multi-species spin configurations
     spin_tuples = _multi_spin_tuples(zero_counts, spins)
     nσ = length(spin_tuples)
 
-    # ZM 全局位置 → 本地 ZM 索引
+    # Global ZM positions → local ZM indices.
     zm_global_positions = Int[]
     zm_global_to_local = Dict{Int, Int}()
     for (k, Nk) in enumerate(species)
@@ -1748,7 +1801,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
         end
     end
 
-    # 每 ZM 粒子（本地序）的物种标签
+    # Species labels of ZM particles (local order)
     zm_particle_species = Int[]
     for (k, mk) in enumerate(zero_counts)
         for _ in 1:mk
@@ -1756,7 +1809,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
         end
     end
 
-    # FM 全局位置 → 本地 FM 索引
+    # Global FM positions → local FM indices.
     fm_global_positions = Int[]
     fm_global_to_local = Dict{Int, Int}()
     fm_particle_species = Int[]
@@ -1770,7 +1823,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
         end
     end
 
-    # 每物种 Wigner D 矩阵
+    # Wigner D matrices for each species.
     wigner_Ds_by_species = Dict{Int, Vector{Matrix{ComplexF64}}}()
     spin_to_dj_by_species = Dict{Int, Dict{Float64, Int}}()
     for k in 1:K
@@ -1783,7 +1836,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
         end
     end
 
-    # 有限动量子空间态（多物种版）
+    # Finite-momentum subspace states (multi-species version).
     if Nfm > 0
         fin_n_list = Momentum[n_tuple[i] for i in 1:N if !iszero(n_tuple[i])]
         fin_lam_list = Float64[lambda_tuple[i] for i in 1:N if !iszero(n_tuple[i])]
@@ -1805,16 +1858,16 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
         fin_state_to_rowbase[st] = (k - 1) * dim_kappa + 1
     end
 
-    # FM 物种块大小（用于 _is_within_species_permutation 过滤）
+    # FM species-block sizes (used by _is_within_species_permutation filtering).
     fin_species_for_is = Int[species[k] - zero_counts[k] for k in 1:K]
     fin_species_for_is = Int[n for n in fin_species_for_is if n > 0]
 
-    # X 矩阵行维度
+    # X-matrix row dimension.
     row_dim = nσ * n_fin * dim_kappa
     X = zeros(ComplexF64, row_dim, n_r)
     n_r == 0 && return X
 
-    # 每粒子 spin / eta（用于相位计算）
+    # Per-particle spin / eta (used for phase evaluation).
     per_particle_spins = Float64[]
     per_particle_etas = Float64[]
     for (k, Nk) in enumerate(species)
@@ -1829,7 +1882,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
         sign = g_idx > n_base ? -1 : 1
         Dg_Gamma = irrep_mats[g_idx]
 
-        # 有限动量粒子相位（每粒子用自己的 spin/eta）
+        # Finite-momentum particle phases (each particle uses its own spin/eta).
         fin_phase = ComplexF64(1.0, 0.0)
         for (fm_local, gp) in enumerate(fm_global_positions)
             sp_k = fm_particle_species[fm_local]
@@ -1838,7 +1891,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
                                                 etas[sp_k], sign)
             fin_phase *= phase_i
         end
-        # 零动量粒子内禀宇称因子 ∏_k η_k^{M_k}
+        # Intrinsic-parity factor of zero-momentum particles: ∏_k η_k^{M_k}.
         if parity == -1
             for k in 1:K
                 fin_phase *= Float64(etas[k])^zero_counts[k]
@@ -1846,7 +1899,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
         end
         abs(fin_phase) < 1e-14 && continue
 
-        # 变换有限动量/螺旋度并按物种内部排序
+        # Transform finite momenta/helicities and sort separately by species.
         trans_fin_mom = Momentum[apply_transform(g, n_tuple[gp]) for gp in fm_global_positions]
         trans_fin_hel = Float64[parity * lambda_tuple[gp] for gp in fm_global_positions]
 
@@ -1875,7 +1928,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
             !haskey(fin_state_to_rowbase, canon_fin_key) && continue
             fin_row_base = fin_state_to_rowbase[canon_fin_key]
 
-            # 查找稳定子置换: canon_fin[p_fin[i]] == trans_fin[i]
+            # Find stabilizer permutation: canon_fin[p_fin[i]] == trans_fin[i].
             canon_fin_mom_vec = collect(canon_fin_mom)
             canon_fin_hel_vec = collect(canon_fin_hel_arr)
             all_perms_fin = _find_all_permutations(canon_fin_mom_vec, trans_fin_mom)
@@ -1894,7 +1947,7 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
             found_p_fin = Int[]
         end
 
-        # 构造全局置换 p_total: ZM 恒等，FM 经 found_p_fin 映射
+        # Construct full permutation p_total: identity on ZM and found_p_fin mapping on FM.
         p_total = Vector{Int}(undef, N)
         for gp in zm_global_positions
             p_total[gp] = gp
@@ -1907,14 +1960,14 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
         ferm_sign = _multi_species_permutation_sign(p_total, species, particle_types)
         per_s_idx = _decompose_multi_species_permutation(p_total, species)
 
-        # 遍历自旋指标
+        # Traversespin indices
         for sigma_idx in 1:nσ
             sigma = spin_tuples[sigma_idx]
 
             for sigmap_idx in 1:nσ
                 sigmap = spin_tuples[sigmap_idx]
 
-                # D-product: 每 ZM 粒子用所属物种的 Wigner D
+                # D product: every ZM particle uses the Wigner D matrix of its own species.
                 Dprod = ComplexF64(1.0, 0.0)
                 for (zm_local, sp_k) in enumerate(zm_particle_species)
                     if spins[sp_k] != 0.0
@@ -1955,25 +2008,38 @@ function build_X_matrix_zero_momentum(zero_counts::Vector{Int},
     return X
 end
 
-# ============ 规范基重叠矩阵 S ============
+# ============ Canonical-basis overlap matrix S ============
 
 """
-    build_S_matrix(subspace_states::Vector, N::Int, kappa::String, species_type::Symbol) -> Matrix{Float64}
+    build_S_matrix(subspace_states, N, kappa, species_type; storage=:dense)
 
-构造规范基的重叠矩阵 S。
+Construct overlap matrix S of the canonical basis.
 
     S_{(n',λ'),b'; (n',λ'),b''} = Σ_{t ∈ Stab({n'}, λ')} δ(t) × R^{[κ]}_{b'b''}(t)
 
-其中:
-- Stab({n'}, λ') = {t ∈ S_N : n'_{t_i}=n'_i 且 λ'_{t_i}=λ'_i, ∀i}
-- δ(t): 玻色子恒为 1，费米子为 sign(t)
+where:
+- Stab({n'}, λ') = {t ∈ S_N : n'_{t_i}=n'_i and λ'_{t_i}=λ'_i, ∀i}
+- δ(t): always 1 for bosons and sign(t) for fermions.
 
-S 为块对角矩阵，每块对应一个规范态 (n', λ')。
+S is block diagonal, with one block for each canonical state (n', λ'). storage=:dense retains the original dense return value; storage=:sparse returns SparseMatrixCSC and avoids storing off-block zeros.
+
 """
-function build_S_matrix(subspace_states::Vector, N::Int, kappa::String, species_type::Symbol)
+function build_S_matrix(subspace_states::Vector, N::Int, kappa::String,
+                        species_type::Symbol; storage::Symbol=:dense)
+    storage in (:dense, :sparse) ||
+        throw(ArgumentError("storage must be :dense or :sparse, got :$storage"))
     dim_kappa = get_SN_irrep_dim(N, kappa)
     n_states = length(subspace_states)
-    S = zeros(Float64, n_states * dim_kappa, n_states * dim_kappa)
+    total_dim = n_states * dim_kappa
+    S = storage == :dense ? zeros(Float64, total_dim, total_dim) : nothing
+    rows = Int[]
+    cols = Int[]
+    vals = Float64[]
+    if storage == :sparse
+        sizehint!(rows, n_states * dim_kappa^2)
+        sizehint!(cols, n_states * dim_kappa^2)
+        sizehint!(vals, n_states * dim_kappa^2)
+    end
     fermion = (species_type == :fermion)
 
     for (k_idx, (n_p, lam_p)) in enumerate(subspace_states)
@@ -1992,18 +2058,40 @@ function build_S_matrix(subspace_states::Vector, N::Int, kappa::String, species_
             blk .+= delta_s .* get_SN_irrep_matrix(N, kappa, s_idx)
         end
         rb = (k_idx - 1) * dim_kappa + 1
-        S[rb:rb+dim_kappa-1, rb:rb+dim_kappa-1] .= blk
+        if storage == :dense
+            S[rb:rb+dim_kappa-1, rb:rb+dim_kappa-1] .= blk
+        else
+            for j in 1:dim_kappa, i in 1:dim_kappa
+                value = blk[i, j]
+                iszero(value) && continue
+                push!(rows, rb + i - 1)
+                push!(cols, rb + j - 1)
+                push!(vals, value)
+            end
+        end
     end
-    return S
+    return storage == :dense ? S : sparse(rows, cols, vals, total_dim, total_dim)
 end
 
-# 多物种版本：稳定子限制在直积群 S_{N₁}×⋯×S_{Nₖ}
+# Multi-species version: stabilizers are restricted to direct-product group S_{N₁}×⋯×S_{Nₖ}.
 function build_S_matrix(subspace_states::Vector, species::Vector{Int}, κ_tuple,
-                         particle_types::Vector{Symbol})
+                         particle_types::Vector{Symbol};
+                         storage::Symbol=:dense)
+    storage in (:dense, :sparse) ||
+        throw(ArgumentError("storage must be :dense or :sparse, got :$storage"))
     dim_kappa = _kappa_tuple_dim(species, κ_tuple)
     n_states = length(subspace_states)
     N = sum(species)
-    S = zeros(Float64, n_states * dim_kappa, n_states * dim_kappa)
+    total_dim = n_states * dim_kappa
+    S = storage == :dense ? zeros(Float64, total_dim, total_dim) : nothing
+    rows = Int[]
+    cols = Int[]
+    vals = Float64[]
+    if storage == :sparse
+        sizehint!(rows, n_states * dim_kappa^2)
+        sizehint!(cols, n_states * dim_kappa^2)
+        sizehint!(vals, n_states * dim_kappa^2)
+    end
 
     for (k_idx, (n_p, lam_p)) in enumerate(subspace_states)
         stab_mom = _find_all_permutations(collect(n_p), collect(n_p))
@@ -2024,23 +2112,33 @@ function build_S_matrix(subspace_states::Vector, species::Vector{Int}, κ_tuple,
             end
         end
         rb = (k_idx - 1) * dim_kappa + 1
-        S[rb:rb+dim_kappa-1, rb:rb+dim_kappa-1] .= blk
+        if storage == :dense
+            S[rb:rb+dim_kappa-1, rb:rb+dim_kappa-1] .= blk
+        else
+            for j in 1:dim_kappa, i in 1:dim_kappa
+                value = blk[i, j]
+                iszero(value) && continue
+                push!(rows, rb + i - 1)
+                push!(cols, rb + j - 1)
+                push!(vals, value)
+            end
+        end
     end
-    return S
+    return storage == :dense ? S : sparse(rows, cols, vals, total_dim, total_dim)
 end
 
 """
     build_S_matrix_zero_momentum(M, spin_tuples, fin_subspace_states,
                                   N, kappa, species_type) -> Matrix{Float64}
 
-构造零动量情形的重叠矩阵 S（非对称化自旋基底）。
+Construct overlap matrix S for the zero-momentum case (unsymmetrized spin basis).
 
-公式（zero_momentum_new.md Eq.39）:
+Formula (zero_momentum_new.md Eq.39):
   S_{(σ',n',λ',a'), (σ,n,λ,a)} = Σ_{s∈S_M×S_{N-M}} δ(s) ×
     Π_i δ_{σ'_{s_i},σ_i} × Π_j δ_{n'_{s_{M+j}-M},n_j} × Π_j δ_{λ'_{s_{M+j}-M},λ_j}
     × R_{a'a}(s)
 
-与 `build_X_matrix_zero_momentum` (canonical_spin=false) 的行索引约定一致。
+Its row-index convention matches build_X_matrix_zero_momentum (canonical_spin=false).
 """
 function build_S_matrix_zero_momentum(M::Int, spin_tuples::Vector,
                                        fin_subspace_states::Vector,
@@ -2052,7 +2150,7 @@ function build_S_matrix_zero_momentum(M::Int, spin_tuples::Vector,
 
     S = zeros(Float64, nσ * n_fin * dim_kappa, nσ * n_fin * dim_kappa)
 
-    # S_M × S_{N-M} 子群元素列表
+    # List of S_M × S_{N-M} subgroup elements.
     sm_snm = _SM_x_SNM_elements(N, M)
 
     for (σ_idx, σ) in enumerate(spin_tuples)
@@ -2069,17 +2167,17 @@ function build_S_matrix_zero_momentum(M::Int, spin_tuples::Vector,
                     blk = zeros(Float64, dim_kappa, dim_kappa)
 
                     for (s_idx, s) in sm_snm
-                        # 自旋匹配: σ'_{s_i} = σ_i, i=1..M
+                        # Spin matching: σ'_{s_i} = σ_i, i=1..M.
                         σ_ok = true
                         for i in 1:M
                             σp[s[i]] != σ[i] && (σ_ok = false; break)
                         end
                         σ_ok || continue
 
-                        # 有限动量匹配: n'_{s_{M+j}-M} = n_j, λ'_{s_{M+j}-M} = λ_j, j=1..Nfm
+                        # Finite-momentum matching: n'_{s_{M+j}-M} = n_j, λ'_{s_{M+j}-M} = λ_j, j=1..Nfm.
                         fin_ok = true
                         for j in 1:Nfm
-                            sj = s[M + j] - M  # 映射到 1..Nfm
+                            sj = s[M + j] - M  # map to 1..Nfm
                             np_p[sj] != n_p[j] && (fin_ok = false; break)
                             lamp_p[sj] != lam_p[j] && (fin_ok = false; break)
                         end
@@ -2098,7 +2196,7 @@ function build_S_matrix_zero_momentum(M::Int, spin_tuples::Vector,
     return S
 end
 
-# 多物种版本：零动量重叠矩阵
+# Multi-species version: zero-momentum overlap matrix.
 function build_S_matrix_zero_momentum(zero_counts::Vector{Int},
                                        spin_tuples::Vector,
                                        fin_subspace_states::Vector,
@@ -2113,7 +2211,7 @@ function build_S_matrix_zero_momentum(zero_counts::Vector{Int},
 
     S = zeros(Float64, nσ * n_fin * dim_kappa, nσ * n_fin * dim_kappa)
 
-    # ZM / FM 全局位置 → 本地索引
+    # Global ZM / FM positions → local indices.
     zm_global_positions = Int[]
     zm_global_to_local = Dict{Int, Int}()
     fm_global_positions = Int[]
@@ -2147,7 +2245,7 @@ function build_S_matrix_zero_momentum(zero_counts::Vector{Int},
                     blk = zeros(Float64, dim_kappa, dim_kappa)
 
                     for (s_full, per_s_idx) in sm_snm
-                        # ZM 自旋匹配: σ'_{s_full[gp]} = σ_{gp}
+                        # ZM spin matching: σ'_{s_full[gp]} = σ_{gp}.
                         σ_ok = true
                         for gp in zm_global_positions
                             zm_local = zm_global_to_local[gp]
@@ -2157,7 +2255,7 @@ function build_S_matrix_zero_momentum(zero_counts::Vector{Int},
                         end
                         σ_ok || continue
 
-                        # FM 匹配: n'_{s_full[gp]} = n_{gp}, λ'_{...} = λ_{...}
+                        # FM matching: n'_{s_full[gp]} = n_{gp}, λ'_{...} = λ_{...}.
                         fin_ok = true
                         for gp in fm_global_positions
                             fm_local = fm_global_to_local[gp]
@@ -2187,36 +2285,37 @@ function build_S_matrix_zero_momentum(zero_counts::Vector{Int},
     return S
 end
 
-# ============ 高层 API ============
+# ============ High-level API ============
 
 """
     subspace_projection(n_tuple, lambda_tuple, kappa, Gamma;
                         d_total, species_type=:boson, spin, etas)
 
-对单个子空间运行完整投影管道：I 矩阵 → Löwdin → X 矩阵。
+Run the complete projection pipeline for one subspace: I matrix → Löwdin → X matrix.
 
-# 参数
-- `n_tuple`: 代表动量 (N 元组)
-- `lambda_tuple`: 螺旋度组态 (N 元组)
-- `kappa`: S_N 不可约表示标签，如 "[2]", "[1,1]"
-- `Gamma`: 目标群不可约表示，如 "A1", "E", "T1+"
-- `d_total`: 总动量 (用于确定对称群)
-- `species_type`: `:boson` 或 `:fermion`
-- `spin`: 单粒子自旋
-- `etas`: 各物种单粒子内禀宇称，如 `[1.0]` 或 `[-1.0]`
+# Arguments
+- n_tuple: representative momentum (N-tuple)
+- lambda_tuple: helicity configuration (N-tuple)
+- kappa: S_N irrep label, for example "[2]" or "[1,1]"
+- Gamma: target-group irrep, for example "A1", "E", or "T1+"
+- d_total: total momentum (used to determine the symmetry group)
+- species_type: :boson or :fermion
+- spin: single-particle spin
+- etas: single-particle intrinsic parity for each species, for example [1.0] or [-1.0]
 
-# 返回
-- `Z`: 非零本征值向量
-- `X`: 系数矩阵 (子空间维度 × 非零本征值数)，列 r 对应 |Γ, r⟩（μ=1）
-- `subspace_states`: 规范基态列表
-- `I_evals`: I 矩阵全部本征值 (含零，用于检验幂等性)
+# Returns
+- Z: nonzero-eigenvalue vector
+- X: coefficient matrix (subspace dimension × number of nonzero eigenvalues); column r corresponds to |Γ, r⟩ (μ=1)
+- subspace_states: canonical-basis-state list
+- I_evals: all I-matrix eigenvalues (including zero, for idempotency checks)
 """
 function subspace_projection(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
                               kappa::String, Gamma::String;
                               d_total::Momentum=D000,
                               species_type::Symbol=:boson,
-                              spin::Float64, etas::Vector{Float64}) where N
-    # 检测零动量 + 非零自旋粒子 → 零动量管线
+                              spin::Float64, etas::Vector{Float64},
+                              prepared_orbit=nothing) where N
+    # Detect zero-momentum + nonzero-spin particles → zero-momentum pipeline.
     M = count(n -> n == Momentum(0,0,0), n_tuple)
     if M > 0 && spin != 0.0
         return _subspace_projection_zero(M, n_tuple, lambda_tuple, kappa, Gamma;
@@ -2224,42 +2323,47 @@ function subspace_projection(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N
                                           spin=spin, etas=etas)
     end
 
-    # 确定对称群（费米子使用双覆盖）
+    # Determine symmetry group (fermions use the double cover).
     needs_double = (species_type == :fermion)
     group_els, group_name = group_for_momentum(d_total; double_cover=needs_double)
     irrep_mats = irrep_matrices(Gamma; group=group_name)
 
-    nG = length(group_els)          # 全群大小 |G|
-    n_base = needs_double ? nG ÷ 2 : nG  # 基础 O(3) 群大小
+    nG = length(group_els)  # full group size |G|
+    n_base = needs_double ? nG ÷ 2 : nG  # base O(3) group size
 
-    # 1. I 矩阵
+    orbit = prepared_orbit === nothing ?
+        _prepare_projection_orbit(n_tuple, lambda_tuple, group_els, n_base) :
+        prepared_orbit
+
+    # 1. I matrix
     I = build_I_matrix(n_tuple, lambda_tuple, kappa, Gamma,
-                        group_els, irrep_mats, species_type, spin, etas, n_base)
+                        group_els, irrep_mats, species_type, spin, etas, n_base;
+                        prepared_orbit=orbit)
 
-    # 2. Löwdin 正交化 (同时返回全部本征值，避免重复特征分解)
+    # 2. Löwdin orthogonalization (also return all eigenvalues to avoid repeated eigendecomposition).
     Z, C, _, I_evals = lowdin_orthogonalize(I)
 
-    # 3. X 矩阵
+    # 3. X matrix.
     X = build_X_matrix(n_tuple, lambda_tuple, kappa, Gamma,
-                        group_els, irrep_mats, species_type, spin, etas, n_base, Z, C)
+                        group_els, irrep_mats, species_type, spin, etas, n_base, Z, C;
+                        prepared_orbit=orbit)
 
-    # 4. 子空间态列表 (与 build_X_matrix 内部调用保持一致)
-    subspace_states = _collect_subspace_states(n_tuple, lambda_tuple, group_els,
-                                               spin, etas[1], n_base)
+    # 4. Subspace-state list (consistent with internal build_X_matrix calls).
+    subspace_states = orbit.subspace_states
 
     return (Z=Z, X=X, subspace_states=subspace_states, I_evals=I_evals)
 end
 
-# ============ 多物种 subspace_projection ============
+# ============ Multi-species subspace_projection ============
 
 """
     _canonicalize_zm_ordering(n_tuple, lambda_tuple, species)
 
-将每个物种内的粒子排序：零动量粒子在前，有限动量粒子在后，同时重排 helicity。
-返回 (sorted_n, sorted_lam, zero_counts)。
+Sort particles of every species: zero-momentum particles first and finite-momentum particles last, while reordering helicities accordingly.
+Return (sorted_n, sorted_lam, zero_counts).
 
-ZM pipeline 函数要求族内 ZM 优先排序，此函数在 _subspace_projection_zero
-内部自动调用，用户无需手动处理。
+The ZM-pipeline functions require ZM-first ordering for each species. This helper is called automatically inside _subspace_projection_zero; users need not handle it manually.
+
 """
 function _canonicalize_zm_ordering(n_tuple::NTuple{N,Momentum},
                                    lambda_tuple::NTuple{N,Float64},
@@ -2290,15 +2394,15 @@ end
     subspace_projection(n_tuple, lambda_tuple, κ_tuple, Gamma;
                         d_total, species, particle_types, spins, etas)
 
-多物种投影管线：计算 I 矩阵 → Löwdin 正交化 → X 矩阵。
-检测到零动量且对应物种自旋非零时自动切换 ZM 管线。
+Multi-species projection pipeline: I matrix → Löwdin orthogonalization → X matrix.
+Automatically switch to the ZM pipeline when a species contains a zero-momentum particle with nonzero spin.
 """
 function subspace_projection(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N,Float64},
                              κ_tuple, Gamma::String;
                              d_total::Momentum=D000,
                              species::Vector{Int}, particle_types::Vector{Symbol},
                              spins::Vector{Float64}, etas::Vector{Float64}) where N
-    # 检测零动量 + 非零自旋粒子 → 零动量管线
+    # Detect zero-momentum + nonzero-spin particles → zero-momentum pipeline.
     M_total = 0
     has_zm_spin = false
     off = 0
@@ -2322,7 +2426,7 @@ function subspace_projection(n_tuple::NTuple{N,Momentum}, lambda_tuple::NTuple{N
                                           spins=spins, etas=etas)
     end
 
-    # 有限动量管线
+    # Finite-momentum pipeline.
     needs_double = any(pt -> pt == :fermion, particle_types)
     group_els, group_name = group_for_momentum(d_total; double_cover=needs_double)
     irrep_mats = irrep_matrices(Gamma; group=group_name)
@@ -2346,19 +2450,17 @@ end
 """
     _subspace_projection_zero(n_tuple, lambda_tuple, κ_tuple, Gamma; ...)
 
-多物种零动量粒子投影管线。
-自动对输入进行 ZM 优先规范化排序，然后调用
+Multi-species zero-momentum particle projection pipeline.
+Automatically normalize input to ZM-first canonical order, then call
 build_I_matrix_zero_momentum → Löwdin → build_X_matrix_zero_momentum。
 """
 
 """
     _subspace_projection_zero(M, n_tuple, lambda_tuple, kappa, Gamma; ...)
 
-零动量粒子投影管线：build_I_matrix_zero_momentum → Löwdin → build_X_matrix_zero_momentum。
+Zero-momentum particle projection pipeline: build_I_matrix_zero_momentum → Löwdin → build_X_matrix_zero_momentum。
 
-约定 R_st(0)=I（零动量方向无定义，取恒等旋转），因此零动量粒子的自旋投影 σ
-充当其"螺旋度"标签。返回的 subspace_states 是标准 (n_full, λ_full) 二元组格式，
-与 build_V_hel 完全兼容。
+Use convention R_st(0)=I (zero-momentum direction is undefined, so use the identity rotation); spin projection σ of zero-momentum particles therefore serves as its "helicity" label. Returned subspace_states use standard (n_full, λ_full) tuples and are fully compatible with build_V_hel.
 """
 function _subspace_projection_zero(M::Int, n_tuple::NTuple{N,Momentum},
                                     lambda_tuple::NTuple{N,Float64},
@@ -2378,14 +2480,14 @@ function _subspace_projection_zero(M::Int, n_tuple::NTuple{N,Momentum},
                                       group_els, irrep_mats, species_type, spin, etas, n_base)
     Z, C, _, I_evals = lowdin_orthogonalize(I)
 
-    # 非对称化自旋基: 所有 (2j+1)^M 个自旋组态，与 build_V_hel 一致
+    # Unsymmetrized spin basis: all (2j+1)^M spin configurations, consistent with build_V_hel.
     X = build_X_matrix_zero_momentum(M, j, n_tuple, lambda_tuple, kappa, Gamma,
                                       group_els, irrep_mats, species_type, spin,
                                       etas, n_base, Z, C; canonical_spin=false)
 
-    # 构造标准 (n_full, λ_full) 格式，与 build_V_hel 兼容
-    # R_st(0)=I → wigner_D(j,0)=I → 旋转系数退化为 δ_{σ',σ}
-    # 零动量粒子 λ 标签取所有自旋投影值（非对称化），与正则极化基底一致
+    # Construct standard (n_full, λ_full) format, compatible with build_V_hel.
+    # R_st(0)=I → wigner_D(j,0)=I → rotation coefficients reduce to δ_{σ',σ}
+    # Zero-momentum particle λ labels take all spin-projection values (unsymmetrized), consistent with the canonical-polarization basis.
     all_spins = _spin_tuples(j, M)
     Nfm = N - M
     if Nfm > 0
@@ -2411,7 +2513,7 @@ function _subspace_projection_zero(M::Int, n_tuple::NTuple{N,Momentum},
     return (Z=Z, X=X, subspace_states=subspace_states, I_evals=I_evals)
 end
 
-# ============ 多物种 _subspace_projection_zero ============
+# ============ Multi-species _subspace_projection_zero ============
 
 function _subspace_projection_zero(n_tuple::NTuple{N,Momentum},
                                    lambda_tuple::NTuple{N,Float64},
@@ -2419,7 +2521,7 @@ function _subspace_projection_zero(n_tuple::NTuple{N,Momentum},
                                    d_total::Momentum,
                                    species::Vector{Int}, particle_types::Vector{Symbol},
                                    spins::Vector{Float64}, etas::Vector{Float64}) where N
-    # 规范排序: ZM 粒子优先于 FM 粒子（按物种）
+    # Canonical ordering: ZM particles precede FM particles（by species）
     sorted_n, sorted_lam, zero_counts = _canonicalize_zm_ordering(
         n_tuple, lambda_tuple, species)
     M_total = sum(zero_counts)
@@ -2439,12 +2541,12 @@ function _subspace_projection_zero(n_tuple::NTuple{N,Momentum},
                                       group_els, irrep_mats, species, particle_types,
                                       spins, etas, n_base, Z, C)
 
-    # 构造标准 (n_full, λ_full) 格式的子空间态
+    # Construct standard (n_full, λ_full) subspace-state format
     spin_tuples = _multi_spin_tuples(zero_counts, spins)
     Nfm = N - M_total
     if Nfm > 0
-        # 从各物种 FM 部分提取: sorted_n/sorted_lam 保持物种分组，
-        # 每物种内 ZM 排前 FM 排后，不可用 sorted_n[M_total+1:end] 全局切片
+        # Extract from each species FM part: sorted_n/sorted_lam preserve species grouping，
+        # Within each species, ZM precedes FM; cannot use sorted_n[M_total+1:end] global slice.
         fin_mom_vec = Momentum[]
         fin_lam_vec = Float64[]
         off = 0
@@ -2470,8 +2572,8 @@ function _subspace_projection_zero(n_tuple::NTuple{N,Momentum},
         fin_states = [(Tuple{}(), Tuple{}())]
     end
 
-    # 按物种构造 (n, λ): 每物种内 ZM 前排 FM 后排，保持物种分组
-    # 这确保 per_spin (按物种展开) 与 full_n/full_lam 索引对齐
+    # Construct (n, λ) by species: ZM precedes FM within every species, preserving species grouping.
+    # This ensures per_spin (expanded by species) aligns with full_n/full_lam indices.
     zero_mom = Momentum(0, 0, 0)
     n_species = length(species)
     subspace_states = []
@@ -2485,13 +2587,13 @@ function _subspace_projection_zero(n_tuple::NTuple{N,Momentum},
                 M_k = zero_counts[k]
                 Nk = species[k]
                 Fk = Nk - M_k
-                # ZM 粒子 (物种 k)
+                # ZM particle (species k)
                 for j in 1:M_k
                     push!(full_n_vec, zero_mom)
                     push!(full_lam_vec, σ[z_off + j])
                 end
                 z_off += M_k
-                # FM 粒子 (物种 k)
+                # FM particle (species k).
                 for j in 1:Fk
                     push!(full_n_vec, fn[f_off + j])
                     push!(full_lam_vec, fl[f_off + j])
@@ -2509,7 +2611,7 @@ end
     project_interaction(V::AbstractMatrix, X_left::AbstractMatrix, X_right::AbstractMatrix)
         -> Matrix
 
-相互作用矩阵投影: V^Γ = X_left^† × V × X_right
+Interaction-matrix projection: V^Γ = X_left^† × V × X_right
 """
 function project_interaction(V::AbstractMatrix, X_left::AbstractMatrix, X_right::AbstractMatrix)
     return X_left' * V * X_right
@@ -2520,17 +2622,17 @@ end
               per_spin_left, per_spin_right, L, V_can_func, extra_args...)
         -> Matrix
 
-完整投影流程: V_can → V_hel → X_left^† × V_hel × X_right
+Complete projection pipeline: V_can → V_hel → X_left^† × V_hel × X_right
 
-# 参数
-- `X_left, X_right`: `subspace_projection` 或 `build_X_matrix` 返回的 X 矩阵
-- `subspace_states_left/right`: 子空间基态列表 (每项 `(n_tuple, λ_tuple)`)
-- `per_spin_left/right`: 每粒子自旋
-- `L`: 有限体积尺寸
-- `V_can_func(n'_tuple, σ'_tuple, n_tuple, σ_tuple, extra_args...)`: 正则极化表象下的 V 矩阵元
-- `extra_args...`: 透传给 V_can_func
+# Arguments
+- `X_left, X_right`: X matrices returned by `subspace_projection` or `build_X_matrix`
+- `subspace_states_left/right`: subspace basis-state lists (each entry `(n_tuple, λ_tuple)`)
+- `per_spin_left/right`: per-particle spins
+- `L`: finite-volume size
+- `V_can_func(n'_tuple, σ'_tuple, n_tuple, σ_tuple, extra_args...)`: V matrix element in canonical-polarization basis
+- `extra_args...`: forwarded to V_can_func
 
-自动乘 (2π ħc/L)^{d/2} 因子, d = 3(N_α + N_β) - 6。
+Automatically multiply by (2π ħc/L)^{d/2} factor, d = 3(N_α + N_β) - 6。
 """
 function project_V(X_left::AbstractMatrix, X_right::AbstractMatrix,
                    subspace_states_left::Vector,
@@ -2539,8 +2641,8 @@ function project_V(X_left::AbstractMatrix, X_right::AbstractMatrix,
                    per_spin_right::AbstractVector{<:Real},
                    L::Real,
                    V_can_func::Function, extra_args...)
-    # Fourier 因子: (2π ħc/L)^{d/2}, d = 3(N_α + N_β) - 6
-    # N_α, N_β 从 subspace_states 中第一个态的动量元组长度获取
+    # Fourier factor: (2π ħc/L)^{d/2}, d = 3(N_α + N_β) - 6
+    # N_α, N_β obtained from momentum-tuple lengths of first states in subspace_states.
     N_α = length(first(subspace_states_left)[1])
     N_β = length(first(subspace_states_right)[1])
     d = 3 * (N_α + N_β) - 6
@@ -2556,7 +2658,7 @@ end
     project_V_hel(X_left, X_right, subspace_states_left, subspace_states_right,
                   L, V_hel_adapter, extra_args...) -> Matrix{ComplexF64}
 
-螺旋度表象版 project_V。无需 per_spin，直接调用 build_V_hel_direct 填 V_hel。
+Helicity-basis version of project_V. Does not require per_spin; directly calls build_V_hel_direct to fill V_hel.
 """
 function project_V_hel(X_left::AbstractMatrix, X_right::AbstractMatrix,
                        subspace_states_left::Vector,

@@ -6,11 +6,11 @@ export group_elements, group_for_momentum, apply_transform
 export O_h, C4v, C2v, C3v
 export O_h2, C4v2, C3v2, C2v2
 
-# ============ O_h 群 48 个群元（3×3 整数矩阵）============
+# ============ O_h group: 48 elements (3×3 integer matrices)============
 
 const _OH_ALL = SMatrix{3,3,Int}[
-    # 1-24: 纯旋转（行列式 +1）
-    SMatrix{3,3,Int}( 1, 0, 0,  0, 1, 0,  0, 0, 1),   #  1: 恒等
+    # 1-24: proper rotations (determinant +1)
+    SMatrix{3,3,Int}( 1, 0, 0,  0, 1, 0,  0, 0, 1),   #  1: identity
     SMatrix{3,3,Int}( 0, 0, 1,  1, 0, 0,  0, 1, 0),   #  2
     SMatrix{3,3,Int}( 0, 1, 0,  0, 0, 1,  1, 0, 0),   #  3
     SMatrix{3,3,Int}( 0,-1, 0,  0, 0, 1, -1, 0, 0),   #  4
@@ -34,7 +34,7 @@ const _OH_ALL = SMatrix{3,3,Int}[
     SMatrix{3,3,Int}( 1, 0, 0,  0,-1, 0,  0, 0,-1),   # 22
     SMatrix{3,3,Int}(-1, 0, 0,  0, 1, 0,  0, 0,-1),   # 23
     SMatrix{3,3,Int}(-1, 0, 0,  0,-1, 0,  0, 0, 1),   # 24
-    # 25-48: 反演 × 纯旋转（行列式 -1）
+    # 25-48: inversion × proper rotations (determinant -1)
     SMatrix{3,3,Int}(-1, 0, 0,  0,-1, 0,  0, 0,-1),   # 25
     SMatrix{3,3,Int}( 0, 0,-1, -1, 0, 0,  0,-1, 0),   # 26
     SMatrix{3,3,Int}( 0,-1, 0,  0, 0,-1, -1, 0, 0),   # 27
@@ -61,30 +61,30 @@ const _OH_ALL = SMatrix{3,3,Int}[
     SMatrix{3,3,Int}( 1, 0, 0,  0, 1, 0,  0, 0,-1),   # 48
 ]
 
-# ============ 子群定义 ============
+# ============ Subgroup definitions ============
 
-# C_4v: O_h 子群，对应总动量 (0,0,1)
+# C_4v: O_h subgroup corresponding to total momentum (0,0,1)
 const _C4V_INDICES = [1, 14, 15, 24, 42, 43, 46, 47]
 
-# C_2v: O_h 子群，对应总动量 (0,1,1)
+# C_2v: O_h subgroup corresponding to total momentum (0,1,1)
 const _C2V_INDICES = [1, 16, 41, 46]
 
-# C_3v: O_h 子群，对应总动量 (1,1,1)
+# C_3v: O_h subgroup corresponding to total momentum (1,1,1)
 const _C3V_INDICES = [1, 2, 3, 41, 43, 45]
 
-# 构造子群矩阵列表
+# Construct subgroup matrix lists
 const _C4V_ALL = [_OH_ALL[i] for i in _C4V_INDICES]
 const _C2V_ALL = [_OH_ALL[i] for i in _C2V_INDICES]
 const _C3V_ALL = [_OH_ALL[i] for i in _C3V_INDICES]
 
-# ============ 公开常量（类型别名） ============
+# ============ Public constants (type aliases) ============
 
 const O_h = _OH_ALL
 const C4v = _C4V_ALL
 const C2v = _C2V_ALL
 const C3v = _C3V_ALL
 
-# ============ 双覆盖群元（O(3) 矩阵重复两次，两次 SU(2) 提升）============
+# ============ Double-cover elements (O(3) matrices repeated twice, with two SU(2) lifts)============
 
 const _OH2_ALL  = vcat(_OH_ALL, _OH_ALL)
 const _C4V2_ALL = vcat(_C4V_ALL, _C4V_ALL)
@@ -96,24 +96,24 @@ const C4v2 = _C4V2_ALL
 const C3v2 = _C3V2_ALL
 const C2v2 = _C2V2_ALL
 
-# ============ API 函数 ============
+# ============ API functions ============
 
 """
     group_elements(group::Symbol) -> Vector{SMatrix{3,3,Int}}
 
-返回指定对称群的所有群元矩阵。
+Return all group-element matrices of the specified symmetry group.
 
-单覆盖:
-- `:Oh`  — O_h，48 个群元
-- `:C4v` — C_4v，8 个群元
-- `:C2v` — C_2v，4 个群元
-- `:C3v` — C_3v，6 个群元
+Single cover:
+- `:Oh`  — O_h，48 elements
+- `:C4v` — C_4v，8 elements
+- `:C2v` — C_2v，4 elements
+- `:C3v` — C_3v，6 elements
 
-双覆盖:
-- `:Oh2`  — 2O_h，96 个群元（48 O(3) 矩阵重复两次）
-- `:C4v2` — C_4v 双覆盖，16 个群元
-- `:C2v2` — C_2v 双覆盖，8 个群元
-- `:C3v2` — C_3v 双覆盖，12 个群元
+Double cover:
+- `:Oh2`  — 2O_h, 96 elements (48 O(3) matrices repeated twice)
+- `:C4v2` — C_4v double cover, 16 elements
+- `:C2v2` — C_2v double cover, 8 elements
+- `:C3v2` — C_3v double cover, 12 elements
 """
 function group_elements(group::Symbol)
     if group == :Oh
@@ -133,23 +133,23 @@ function group_elements(group::Symbol)
     elseif group == :C3v2
         return _C3V2_ALL
     else
-        throw(ArgumentError("未知对称群 :$(group)，可选 :Oh, :Oh2, :C4v, :C4v2, :C2v, :C2v2, :C3v, :C3v2"))
+        throw(ArgumentError("unknown symmetry group :$(group); choose from :Oh, :Oh2, :C4v, :C4v2, :C2v, :C2v2, :C3v, :C3v2"))
     end
 end
 
 """
     group_for_momentum(d; double_cover=false)
 
-根据三动量自动返回对应的对称群。
+Automatically return the symmetry group corresponding to a three-momentum.
 
-| 动量     | 单覆盖    | 双覆盖     |
+| Momentum     | Single cover | Double cover |
 |----------|-----------|------------|
 | (0,0,0)  | O_h (48)  | 2O_h (96)  |
 | (0,0,1)  | C_4v (8)  | C_4v (16)  |
 | (0,1,1)  | C_2v (4)  | C_2v (8)   |
 | (1,1,1)  | C_3v (6)  | C_3v (12)  |
 
-当 `double_cover=true` 时返回双覆盖群元素（O(3) 矩阵重复两次）。
+When `double_cover=true`, return double-cover group elements (each O(3) matrix repeated twice).
 """
 function group_for_momentum(d; double_cover::Bool=false)
     if d isa SVector{3,Int}
@@ -159,7 +159,7 @@ function group_for_momentum(d; double_cover::Bool=false)
     elseif d isa AbstractVector{<:Integer}
         dv = SVector{3,Int}(d[1], d[2], d[3])
     else
-        throw(ArgumentError("动量 d 必须是 SVector{3,Int}, NTuple{3,Int} 或整数向量"))
+        throw(ArgumentError("momentum d must be an SVector{3,Int}, NTuple{3,Int}, or integer vector"))
     end
 
     a = abs.(dv)
@@ -172,14 +172,14 @@ function group_for_momentum(d; double_cover::Bool=false)
     elseif a == SVector(1, 1, 1)
         return double_cover ? (_C3V2_ALL, :C3v2) : (_C3V_ALL, :C3v)
     else
-        throw(ArgumentError("未找到与动量 $dv 对应的对称群"))
+        throw(ArgumentError("no symmetry group was found for momentum $dv"))
     end
 end
 
 """
     apply_transform(g::SMatrix{3,3,Int}, n)
 
-将群元 g 作用于动量矢量 n 上（矩阵乘法）。
+Apply group element g to momentum vector n (matrix multiplication).
 """
 function apply_transform(g::SMatrix{3,3,Int}, n)
     return g * n
@@ -188,20 +188,20 @@ end
 """
     apply_transform(g::SMatrix{3,3,Int}, n::NTuple{N, Momentum}) where N
 
-将群元 g 作用于 N 粒子态（每个动量同时变换）。
+Apply group element g to an N-particle state (transform every momentum).
 """
 function apply_transform(g::SMatrix{3,3,Int}, state::NTuple{N, <:Any}) where N
     return ntuple(i -> g * state[i], N)
 end
 
-# ============ 不可约表示矩阵（O_h 群）============
+# ============ Irrep matrices (O_h group)============
 
 export irrep_matrices, irrep_matrix, OH_IRREP_NAMES
 
 const OH_IRREP_NAMES = ["A1+", "A2+", "E+", "T1+", "T2+",
                          "A1-", "A2-", "E-", "T1-", "T2-"]
 
-# 辅助：由 (I,J,V) 三元组构造 3×3 矩阵
+# Helper: construct a 3×3 matrix from (I,J,V) triple
 function _sp3(I::Vector{Int}, J::Vector{Int}, V::Vector{Float64})
     M = zeros(3, 3)
     @inbounds for k in 1:3
@@ -360,23 +360,23 @@ const _OH_IRREPS = _build_oh_irreps()
 """
     irrep_matrices(irrep::String; group::Symbol=:Oh) -> Vector{Matrix}
 
-返回不可约表示矩阵。`group` 可选：
-- `:Oh` — O_h 群（48），10 个玻色子不可约表示
-- `:Oh2` — 2O_h 双覆盖群（96），16 个不可约表示（10 玻色子 + 6 费米子）
-- `:C4v`, `:C2v`, `:C3v` — 小群（运动系），使用 Morningstar 约定的小群原生不可约表示。
+Return irrep matrices.`group` is optional:
+- `:Oh` — O_h group (48), with 10 bosonic irreps
+- `:Oh2` — 2O_h double-cover group (96), with 16 irreps (10 bosonic + 6 fermionic)
+- `:C4v`, `:C2v`, `:C3v` — little groups (moving frames), using the native little-group irreps in the Morningstar convention.
 
-小群不可约表示：
-  C_4v: A1,A2,B1,B2,E (玻色子), G1,G2 (费米子)
-  C_3v: A1,A2,E (玻色子), F1,F2,G (费米子)
-  C_2v: A1,A2,B1,B2 (玻色子), G (费米子)
-  费米子不可约表示自动使用双覆盖群。
+Little-group irreps:
+  C_4v: A1,A2,B1,B2,E (bosonic), G1,G2 (fermionic)
+  C_3v: A1,A2,E (bosonic), F1,F2,G (fermionic)
+  C_2v: A1,A2,B1,B2 (bosonic), G (fermionic)
+  Fermionic irreps automatically use the double-cover group.
 
-# 示例
+# Examples
 ```julia
-D = irrep_matrices("T1+")              # O_h 群 T1+，48 个 3×3 矩阵
-D = irrep_matrices("G1+"; group=:Oh2)  # 2O_h 费米子不可约表示，96 个 2×2 矩阵
-D = irrep_matrices("E"; group=:C4v)    # C_4v 小群 E 不可约表示（玻色子），8 个 2×2 矩阵
-D = irrep_matrices("G1"; group=:C4v)   # C_4v 小群 G1 不可约表示（费米子），16 个 2×2 矩阵
+D = irrep_matrices("T1+")              # O_h-group T1+, 48 3×3 matrices
+D = irrep_matrices("G1+"; group=:Oh2)  # 2O_h fermionic irrep, 96 2×2 matrices
+D = irrep_matrices("E"; group=:C4v)    # C_4v little-group E irrep (bosonic), 8 2×2 matrices
+D = irrep_matrices("G1"; group=:C4v)   # C_4v little-group G1 irrep (fermionic), 16 2×2 matrices
 ```
 """
 function irrep_matrices(irrep::String; group::Symbol=:Oh)
@@ -390,7 +390,7 @@ function irrep_matrices(irrep::String; group::Symbol=:Oh)
         elseif irrep in C4V_FERMIONIC_NAMES
             return _C4VD_IRREPS[irrep]
         else
-            throw(ArgumentError("未知 C_4v 不可约表示 :$(irrep)，可选 $(C4V_IRREP_NAMES)"))
+            throw(ArgumentError("unknown C_4v irrep :$(irrep); choose from $(C4V_IRREP_NAMES)"))
         end
     elseif group == :C4v2
         return _C4VD_IRREPS[irrep]
@@ -400,7 +400,7 @@ function irrep_matrices(irrep::String; group::Symbol=:Oh)
         elseif irrep in C2V_FERMIONIC_NAMES
             return _C2VD_IRREPS[irrep]
         else
-            throw(ArgumentError("未知 C_2v 不可约表示 :$(irrep)，可选 $(C2V_IRREP_NAMES)"))
+            throw(ArgumentError("unknown C_2v irrep :$(irrep); choose from $(C2V_IRREP_NAMES)"))
         end
     elseif group == :C2v2
         return _C2VD_IRREPS[irrep]
@@ -410,20 +410,20 @@ function irrep_matrices(irrep::String; group::Symbol=:Oh)
         elseif irrep in C3V_FERMIONIC_NAMES
             return _C3VD_IRREPS[irrep]
         else
-            throw(ArgumentError("未知 C_3v 不可约表示 :$(irrep)，可选 $(C3V_IRREP_NAMES)"))
+            throw(ArgumentError("unknown C_3v irrep :$(irrep); choose from $(C3V_IRREP_NAMES)"))
         end
     elseif group == :C3v2
         return _C3VD_IRREPS[irrep]
     else
-        throw(ArgumentError("未知对称群 :$(group)，可选 :Oh, :Oh2, :C4v, :C4v2, :C2v, :C2v2, :C3v, :C3v2"))
+        throw(ArgumentError("unknown symmetry group :$(group); choose from :Oh, :Oh2, :C4v, :C4v2, :C2v, :C2v2, :C3v, :C3v2"))
     end
 end
 
 """
     irrep_matrix(irrep::String, i::Int; group::Symbol=:Oh) -> Matrix
 
-返回不可约表示 `irrep` 在群元 `g_i` 处的表示矩阵 D^Γ(g_i)。
-`i` 是群元在 `group_elements(group)` 中的 1-indexed 序号。
+Return irrep `irrep` at group element `g_i` representation matrix D^Γ(g_i)。
+`i` is the 1-indexed position of the group element in `group_elements(group)`  .
 """
 function irrep_matrix(irrep::String, i::Int; group::Symbol=:Oh)
     if group == :Oh
@@ -436,18 +436,18 @@ function irrep_matrix(irrep::String, i::Int; group::Symbol=:Oh)
     end
 end
 
-# ============ O_h 双覆盖群 2O_h（96 个群元，费米子体系）============
+# ============ O_h Double-cover group 2O_h (96 elements, fermionic systems)============
 
 export OH2_IRREP_NAMES, OH2_BOSONIC_IRREP_NAMES, OH2_FERMIONIC_IRREP_NAMES
 
-const OH2_BOSONIC_IRREP_NAMES  = OH_IRREP_NAMES  # 10 个玻色子不可约表示
+const OH2_BOSONIC_IRREP_NAMES  = OH_IRREP_NAMES  # 10 bosonic irreps
 const OH2_FERMIONIC_IRREP_NAMES = ["G1+", "G2+", "H+", "G1-", "G2-", "H-"]
 const OH2_IRREP_NAMES = vcat(OH2_BOSONIC_IRREP_NAMES, OH2_FERMIONIC_IRREP_NAMES)
 
-# Euler 角参数表（i=1..24 对应 proper 旋转）
-# (α, β, γ) 来自 Bernard:2008ax Tab. 2
-# ---------- O_h 纯旋转的轴-角参数（按 _OH_ALL[1:24] 顺序） ----------
-# 数据源自 Bernard:2008ax Tab.2，按 _OH_ALL 顺序重排。
+# Euler-angle parameter table(i=1..24 corresponds to proper rotations)
+# (α, β, γ) from Bernard:2008ax Tab. 2
+# ---------- O_h Axis-angle parameters of O_h proper rotations(in _OH_ALL[1:24] order) ----------
+# Data from Bernard:2008ax Tab.2，reordered in _OH_ALL order.
 # D^(J)(n, ω) = exp(-i ω n·J)
 const _OH_ROTATION_PARAMS = [
     ([0.0, 0.0, 1.0],                    0.0),        #  1: I
@@ -476,9 +476,9 @@ const _OH_ROTATION_PARAMS = [
     ([0.0, 0.0, 1.0],                    -pi),         # 24
 ]
 
-# ---------- Wigner D 矩阵（轴-角参数化：D^(J)(n, ω) = exp(-i ω n·J)） ----------
+# ---------- Wigner D matrices (axis-angle parametrization:D^(J)(n, ω) = exp(-i ω n·J)） ----------
 
-# Pauli 矩阵
+# Pauli matrices
 const _SX = ComplexF64[0 1; 1 0]
 const _SY = ComplexF64[0 -im; im 0]
 const _SZ = ComplexF64[1 0; 0 -1]
@@ -501,7 +501,7 @@ const _OH_PROPER_SU2 = Dict{SMatrix{3,3,Int}, Matrix{ComplexF64}}(
     for i in 1:24
 )
 
-# J=1 生成元（|1,m⟩ 基，m = +1, 0, -1，Condon-Shortley 相位约定）
+# J=1 generators (|1,m⟩ basis, m = +1, 0, -1; Condon–Shortley phase convention)
 const _JX_ONE = ComplexF64[0 1 0; 1 0 1; 0 1 0] / sqrt(2.0)
 const _JY_ONE = ComplexF64[0 -im 0; im 0 -im; 0 im 0] / sqrt(2.0)
 const _JZ_ONE = ComplexF64[1 0 0; 0 0 0; 0 0 -1]
@@ -509,14 +509,14 @@ const _JZ_ONE = ComplexF64[1 0 0; 0 0 0; 0 0 -1]
 """
     _wigner_D_one(n::Vector{Float64}, omega::Float64) -> Matrix{ComplexF64}
 
-D^{1}(n, ω) = exp(-i ω n·J)，通过矩阵指数计算。
+D^{1}(n, ω) = exp(-i ω n·J)，computed with a matrix exponential.
 """
 function _wigner_D_one(n::Vector{Float64}, omega::Float64)
     nJ = n[1]*_JX_ONE + n[2]*_JY_ONE + n[3]*_JZ_ONE
     return exp(-im * omega * nJ)
 end
 
-# J=3/2 生成元（同前，保留供 _wigner_D_threehalf 使用）
+# J=3/2 generators (as above; retained for _wigner_D_threehalf)
 const _S32 = sqrt(3.0) / 2
 const _JX_THREEHALF = ComplexF64[
     0  _S32  0      0
@@ -540,21 +540,21 @@ const _JZ_THREEHALF = ComplexF64[
 """
     _wigner_D_threehalf(n::Vector{Float64}, omega::Float64) -> Matrix{ComplexF64}
 
-D^{3/2}(n, ω) = exp(-i ω n·J)，通过矩阵指数计算。
+D^{3/2}(n, ω) = exp(-i ω n·J)，computed with a matrix exponential.
 """
 function _wigner_D_threehalf(n::Vector{Float64}, omega::Float64)
     nJ = n[1]*_JX_THREEHALF + n[2]*_JY_THREEHALF + n[3]*_JZ_THREEHALF
     return exp(-im * omega * nJ)
 end
 
-# ---------- 构建 2O_h 不可约表示 ----------
+# ---------- Construct 2O_h irreps ----------
 
 function _build_oh2_irreps()
     irr = Dict{String, Vector{Matrix{ComplexF64}}}()
 
-    # ---- 玻色子不可约表示：从 O_h 扩展到 96 元素 ----
+    # ---- Bosonic irreps:extend from O_h to 96 elements ----
     for name in OH_IRREP_NAMES
-        mats_oh = _OH_IRREPS[name]  # 48 个 Float64 矩阵
+        mats_oh = _OH_IRREPS[name]  # 48 Float64 matrices
         mats_96 = Vector{Matrix{ComplexF64}}(undef, 96)
         for i in 1:48
             mats_96[i]      = ComplexF64.(mats_oh[i])
@@ -563,7 +563,7 @@ function _build_oh2_irreps()
         irr[name] = mats_96
     end
 
-    # ---- 费米子不可约表示 ----
+    # ---- Fermionic irreps ----
     for (name, J) in [("G1", :half), ("G2", :half), ("H", :threehalf)]
         proper_mats = Vector{Matrix{ComplexF64}}(undef, 24)
         for i in 1:24
@@ -573,7 +573,7 @@ function _build_oh2_irreps()
             else
                 proper_mats[i] = _wigner_D_threehalf(n, omega)
             end
-            # G2: 对 10≤i≤21 符号翻转（与 A2/T2 一致）
+            # G2: flip the sign for 10≤i≤21 (consistent with A2/T2)
             if name == "G2" && 10 <= i <= 21
                 proper_mats[i] = -proper_mats[i]
             end
@@ -599,9 +599,9 @@ end
 
 const _OH2_IRREPS = _build_oh2_irreps()
 
-# ---------- 子群指标（2O_h 96 元素索引） ----------
+# ---------- Subgroup indices (2O_h 96-element indices) ----------
 
-# O_h 子群指标直接映射到 2O_h：g_k → {k, k+48}（k 已在 1..48 范围内，含 proper 和 improper）
+# O_h subgroup indices map directly to 2O_h：g_k → {k, k+48}（k already in 1..48, including proper and improper elements）
 function _oh2_subgroup_indices(oh_indices::Vector{Int})
     v = Int[]
     for k in oh_indices
@@ -614,20 +614,20 @@ const _OH2_C4V_INDICES  = _oh2_subgroup_indices(_C4V_INDICES)
 const _OH2_C2V_INDICES  = _oh2_subgroup_indices(_C2V_INDICES)
 const _OH2_C3V_INDICES  = _oh2_subgroup_indices(_C3V_INDICES)
 
-# ============ 小群不可约表示（运动系，从 Morningstar:2013bda 生成元构建）============
+# ============ Little-group irreps (moving frames; constructed from Morningstar:2013bda generators)============
 
 export LG_IRREP_NAMES
 
-# ---- C_4v (8 元素), C_4v^d 双覆盖 (16 元素) ----
-# 生成元: C = g_15 (C_{4z}), R = g_47 (I_s C_{2y})
-# 元素: [g_1, g_14, g_15, g_24, g_42, g_43, g_46, g_47]
-# 乘法: g_1=g_15^4, g_14=g_15^3, g_24=g_15^2, g_42=g_47·g_15, g_43=g_47·g_15^3, g_46=g_47·g_15^2
+# ---- C_4v (8 elements), C_4v^d double cover (16 elements) ----
+# Generators: C = g_15 (C_{4z}), R = g_47 (I_s C_{2y})
+# Elements: [g_1, g_14, g_15, g_24, g_42, g_43, g_46, g_47]
+# Products: g_1=g_15^4, g_14=g_15^3, g_24=g_15^2, g_42=g_47·g_15, g_43=g_47·g_15^3, g_46=g_47·g_15^2
 
 const C4V_BOSONIC_NAMES = ["A1", "A2", "B1", "B2", "E"]
 const C4V_FERMIONIC_NAMES = ["G1", "G2"]
 const C4V_IRREP_NAMES = vcat(C4V_BOSONIC_NAMES, C4V_FERMIONIC_NAMES)
 
-# C_4v 元素生成元配方 (rotation_power, use_reflection)
+# C_4v element generator recipes (rotation_power, use_reflection)
 const _C4V_RECIPES = [
     (4, 0),  # g_1  = C^4
     (3, 0),  # g_14 = C^3
@@ -639,7 +639,7 @@ const _C4V_RECIPES = [
     (0, 1),  # g_47 = R
 ]
 
-# C_4v^d 双覆盖元素生成元配方
+# C_4v^d double-cover element generator recipes
 const _C4VD_RECIPES = [
     (8, 0),  # g_1  = C^8
     (7, 0),  # g_14 = C^7
@@ -662,10 +662,10 @@ const _C4V_GENERATORS = Dict{String, Tuple{Matrix{ComplexF64}, Matrix{ComplexF64
     "G2" => (ComplexF64[-(1-im) 0; 0 -(1+im)]/sqrt(2.0), ComplexF64[0 -1; 1 0]),
 )
 
-# ---- C_3v (6 元素), C_3v^d 双覆盖 (12 元素) ----
-# 生成元: C = g_3 (C_{3δ}), R = g_43 (I_s C_{2b})
-# 元素: [g_1, g_2, g_3, g_41, g_43, g_45]
-# 乘法: g_1=g_3^3, g_2=g_3^2, g_41=g_43·g_3, g_45=g_43·g_3^2
+# ---- C_3v (6 elements), C_3v^d double cover (12 elements) ----
+# Generators: C = g_3 (C_{3δ}), R = g_43 (I_s C_{2b})
+# Elements: [g_1, g_2, g_3, g_41, g_43, g_45]
+# Products: g_1=g_3^3, g_2=g_3^2, g_41=g_43·g_3, g_45=g_43·g_3^2
 
 const C3V_BOSONIC_NAMES = ["A1", "A2", "E"]
 const C3V_FERMIONIC_NAMES = ["F1", "F2", "G"]
@@ -699,10 +699,10 @@ const _C3V_GENERATORS = Dict{String, Tuple{Matrix{ComplexF64}, Matrix{ComplexF64
     "G"  => (ComplexF64[1-im -1-im; 1-im 1+im]/2.0, ComplexF64[0 1-im; -1-im 0]/sqrt(2.0)),
 )
 
-# ---- C_2v (4 元素), C_2v^d 双覆盖 (8 元素) ----
-# 生成元: C = g_16 (C_{2e}), R = g_41 (I_s C_{2f})
-# 元素: [g_1, g_16, g_41, g_46]
-# 乘法: g_1=g_16^2, g_46=g_41·g_16
+# ---- C_2v (4 elements), C_2v^d double cover (8 elements) ----
+# Generators: C = g_16 (C_{2e}), R = g_41 (I_s C_{2f})
+# Elements: [g_1, g_16, g_41, g_46]
+# Products: g_1=g_16^2, g_46=g_41·g_16
 
 const C2V_BOSONIC_NAMES = ["A1", "A2", "B1", "B2"]
 const C2V_FERMIONIC_NAMES = ["G"]
@@ -740,7 +740,7 @@ const LG_IRREP_NAMES = Dict(
     :C2v2 => C2V_IRREP_NAMES,
 )
 
-# ---- 从生成元构建所有群元矩阵 ----
+# ---- Build all group-element matrices from generators ----
 
 function _build_from_generators(recipes::Vector{Tuple{Int,Int}},
                                  gen_C::Matrix{ComplexF64},
@@ -781,7 +781,7 @@ function _build_little_group_irreps_double(recipes::Vector{Tuple{Int,Int}},
     return irr
 end
 
-# 预构建所有小群不可约表示
+# Prebuild all little-group irreps
 const _C4V_IRREPS_SINGLE  = _build_little_group_irreps_single(_C4V_RECIPES, _C4V_GENERATORS)
 const _C4VD_IRREPS        = _build_little_group_irreps_double(_C4VD_RECIPES, _C4V_GENERATORS, C4V_BOSONIC_NAMES, C4V_FERMIONIC_NAMES)
 const _C3V_IRREPS_SINGLE  = _build_little_group_irreps_single(_C3V_RECIPES, _C3V_GENERATORS)
@@ -789,7 +789,7 @@ const _C3VD_IRREPS        = _build_little_group_irreps_double(_C3VD_RECIPES, _C3
 const _C2V_IRREPS_SINGLE  = _build_little_group_irreps_single(_C2V_RECIPES, _C2V_GENERATORS)
 const _C2VD_IRREPS        = _build_little_group_irreps_double(_C2VD_RECIPES, _C2V_GENERATORS, C2V_BOSONIC_NAMES, C2V_FERMIONIC_NAMES)
 
-# 查找函数：irrep 属于哪个小群
+# Lookup function: identify the little group containing an irrep
 function _find_lg_group(irrep::String)
     irrep in C4V_IRREP_NAMES && return :C4v
     irrep in C3V_IRREP_NAMES && return :C3v

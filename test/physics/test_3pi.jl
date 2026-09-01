@@ -1,26 +1,26 @@
 # ==========================================================================
-# 3π → 3π 测试 (主体代码端到端验证)
+# 3π → 3π test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个不可约表示 Γ:
-#   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)  ← 主体代码
-#   evals_full = eig(H_raw, S)                                 ← 底层参考
-#   验证: eig(H_proj) ⊂ evals_full
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every irrep Γ:
+#   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)  ← Main code
+#   evals_full = eig(H_raw, S)                                 ← underlying reference
+#   Check: eig(H_proj) ⊂ evals_full
 #
 # π: s=0, I=1, boson, η=-1, m=139.57 MeV
-# 全同玻色子 × 3
+# identical bosons × 3
 #
-# 同位旋分解: (I=1)³ = 7⊕5⊕5⊕3⊕3⊕3⊕1
-#   I=3 → κ="[3]"        接触相互作用
-#   I=2 → κ="[2,1]"      2×2 p 波
-#   I=0 → κ="[1,1,1]"    p 波三重积
-#   I=1 → κ="[3]"⊕"[2,1]"  接触 ⊕ 2×2 p 波 ⊕ 耦合
+# Isospin decomposition: (I=1)³ = 7⊕5⊕5⊕3⊕3⊕3⊕1
+#   I=3 → κ="[3]"        contact interaction
+#   I=2 → κ="[2,1]"      2×2 P-wave
+#   I=0 → κ="[1,1,1]"    P-wavetriple product
+#   I=1 → κ="[3]"⊕"[2,1]"  contact interaction ⊕ 2×2 P-wave ⊕ coupling
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
 
 # ============================================================================
-# 共用参数与辅助量
+# Shared parameters and helper quantities
 # ============================================================================
 const M_3pi    = NPHFforFVE.Momentum
 const m_π_3pi  = 139.57
@@ -61,8 +61,8 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 通用辅助: 构造参考谱 (底层全空间 H_raw, S)
-#           枚举所有不可约表示中的态, 求解 eig(H_raw, S)
+# Common helper: Construct the reference spectrum (underlyingfull space H_raw, S)
+#           enumerate states in all irreps and solve eig(H_raw, S)
 # ============================================================================
 function _build_reference(d, Ncut, species, particle_types, N_α,
                           per_mass, per_spin_r, kappa, V_can_func,
@@ -127,7 +127,7 @@ function _build_reference(d, Ncut, species, particle_types, N_α,
 
     H_raw = T_diag + fv_factor * V_hel
 
-    # 广义本征值 Hψ = E S ψ (处理 S 半正定性)
+    # Generalized eigenvalue problem Hψ = E S ψ (handle positive semidefiniteness of S)
     S_eig = eigen(Hermitian(S_big))
     tol_S = 1e-12
     good_S = S_eig.values .> tol_S
@@ -148,10 +148,10 @@ end
 
 
 # ============================================================================
-# 通用辅助: 用 build_hamiltonian_block 验证各不可约表示
+# Common helper: validate each irrep with build_hamiltonian_block
 # ============================================================================
 function _verify_with_hamiltonian(sys, V_func, params, evals_full, free_Ts, label)
-    println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
+    println("  Free energy levels (first 10 nondegenerate): $(round.(free_Ts, digits=4))")
     println()
     all_ok = true
     for Gamma in sys.selected_irreps
@@ -171,13 +171,13 @@ function _verify_with_hamiltonian(sys, V_func, params, evals_full, free_Ts, labe
         @test ok
     end
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 
 
 # ============================================================================
-# I=3: κ="[3]", dim_κ=1, 接触相互作用
+# I=3: κ="[3]", dim_κ=1, contact interaction
 # V = Cs * ff(n'_π1)ff(n'_π2)ff(n'_π3) * ff(n_π1)ff(n_π2)ff(n_π3)
 # ============================================================================
 function test_3pi_I3()
@@ -189,7 +189,7 @@ function test_3pi_I3()
                           ff_3pi(n1)*ff_3pi(n2)*ff_3pi(n3))
     end
 
-    # ---- 参考谱 (底层全空间) ----
+    # ---- reference spectrum (underlyingfull space) ----
     ref = _build_reference(d_3pi, Ncut_3pi, species_3pi, particle_3pi, N_α_3pi,
         per_mass_3pi, per_spin_r_3pi, "[3]", V_can_func,
         fv_factor_3pi, pref_T_3pi, OH, spin_val_3pi, etas_3pi)
@@ -204,13 +204,13 @@ function test_3pi_I3()
         for (nt, _) in ref.all_states]))
     free_Ts_d = distinct_levels(free_Ts, 10)
 
-    # ---- 主体: FockSystem + build_hamiltonian_block ----
+    # ---- Main path: FockSystem + build_hamiltonian_block ----
     ch = FockChannel("3pi", [3], [:boson], [m_π_3pi], [0//1], [1//1], [-1.0],
                      NPHFforFVE.relativistic)
     sys = FockSystem(NPHFforFVE.D000, Ncut_3pi, [ch], L0_3pi, a_3pi, 3//1, OH)
     params = (Cs=Cs,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         n1p, n2p, n3p = nA; n1, n2, n3 = nB
         ComplexF64(p.Cs * ff_3pi(n1p)*ff_3pi(n2p)*ff_3pi(n3p) *
                           ff_3pi(n1)*ff_3pi(n2)*ff_3pi(n3))
@@ -221,8 +221,8 @@ end
 
 
 # ============================================================================
-# I=2: κ="[2,1]", dim_κ=2, p 波相互作用 (2×2 矩阵)
-# V_{ab} 取 [2,1] 表示的标准矩阵元
+# I=2: κ="[2,1]", dim_κ=2, P-wave interaction (2×2 matrix)
+# V_{ab} uses the standard matrix elements of the [2,1] representation
 # ============================================================================
 function test_3pi_I2()
     C0 = 1.0e-18
@@ -239,7 +239,7 @@ function test_3pi_I2()
                     fac * (sqrt(3)/3) * dp21   fac * (1/3) * dp22 ]
     end
 
-    # ---- 参考谱 ----
+    # ---- reference spectrum ----
     ref = _build_reference(d_3pi, Ncut_3pi, species_3pi, particle_3pi, N_α_3pi,
         per_mass_3pi, per_spin_r_3pi, "[2,1]", V_can_func,
         fv_factor_3pi, pref_T_3pi, OH, spin_val_3pi, etas_3pi)
@@ -253,13 +253,13 @@ function test_3pi_I2()
         for (nt, _) in ref.all_states]))
     free_Ts_d = distinct_levels(free_Ts, 10)
 
-    # ---- 主体: FockSystem + V_func (标量, 由 aA/aB 决定矩阵元) ----
+    # ---- Main path: FockSystem + V_func(returning the complete κ=[2,1] carrier-space matrix) ----
     ch = FockChannel("3pi", [3], [:boson], [m_π_3pi], [0//1], [1//1], [-1.0],
                      NPHFforFVE.relativistic)
     sys = FockSystem(NPHFforFVE.D000, Ncut_3pi, [ch], L0_3pi, a_3pi, 2//1, OH)
     params = (C0=C0,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         n1p, n2p, n3p = nA; n1, n2, n3 = nB
         ff_all = ff_3pi(n1p)*ff_3pi(n2p)*ff_3pi(n3p) * ff_3pi(n1)*ff_3pi(n2)*ff_3pi(n3)
         fac = p.C0 * (2π * ħc_3pi / L_phys)^2 * ff_all
@@ -276,7 +276,7 @@ end
 
 
 # ============================================================================
-# I=0: κ="[1,1,1]", dim_κ=1, p 波三重积相互作用
+# I=0: κ="[1,1,1]", dim_κ=1, P-wavetriple productinteraction
 # V = C0 * (p_1·p_2×p_3)(k_1·k_2×k_3) * ff * ff
 # ============================================================================
 function test_3pi_I0()
@@ -295,7 +295,7 @@ function test_3pi_I0()
                    ff_3pi(n1)*ff_3pi(n2)*ff_3pi(n3))
     end
 
-    # ---- 参考谱 ----
+    # ---- reference spectrum ----
     ref = _build_reference(d_3pi, Ncut_3pi, species_3pi, particle_3pi, N_α_3pi,
         per_mass_3pi, per_spin_r_3pi, "[1,1,1]", V_can_func,
         fv_factor_3pi, pref_T_3pi, OH, spin_val_3pi, etas_3pi)
@@ -309,13 +309,13 @@ function test_3pi_I0()
         for (nt, _) in ref.all_states]))
     free_Ts_d = distinct_levels(free_Ts, 10)
 
-    # ---- 主体 ----
+    # ---- Main path ----
     ch = FockChannel("3pi", [3], [:boson], [m_π_3pi], [0//1], [1//1], [-1.0],
                      NPHFforFVE.relativistic)
     sys = FockSystem(NPHFforFVE.D000, Ncut_3pi, [ch], L0_3pi, a_3pi, 0//1, OH)
     params = (C0=C0,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         n1p, n2p, n3p = nA; n1, n2, n3 = nB
         tp_out = n1p[1]*(n2p[2]*n3p[3]-n2p[3]*n3p[2]) +
                  n1p[2]*(n2p[3]*n3p[1]-n2p[1]*n3p[3]) +
@@ -335,11 +335,11 @@ end
 # ============================================================================
 # I=1 coupled: κ="[3]" ⊕ κ="[2,1]", dim_total=3
 #
-# [3] 块: 接触 Cs * ff * ff
-# [2,1] 块: 2×2 p 波
-# 耦合块: [3] ↔ [2,1], 形状因子 f₁, f₂ 由动量差构造
+# [3] block: contact interaction Cs * ff * ff
+# [2,1] block: 2×2 P-wave
+# coupling block: [3] ↔ [2,1], form factors f₁, f₂ constructed from momentum differences
 #
-# 参考谱需要手动拼接 S_big (3K×3K) 和 V_can (3×3)
+# The reference spectrum requires manually assembling S_big (3K×3K) and V_can (3×3)
 # ============================================================================
 function test_3pi_I1_coupled()
     Cs = 2.0e-14
@@ -348,7 +348,7 @@ function test_3pi_I1_coupled()
 
     dim_s = 1; dim_m_κ = 2; dim_total = 3
 
-    # ========== V_can (3×3) 供参考谱用 ==========
+    # ========== V_can (3×3) for the reference spectrum ==========
     function V_can_func(np, sp, n, s, extra...)
         n1p, n2p, n3p = np; n1, n2, n3 = n
         ff_all = ff_3pi(n1p)*ff_3pi(n2p)*ff_3pi(n3p) * ff_3pi(n1)*ff_3pi(n2)*ff_3pi(n3)
@@ -363,7 +363,7 @@ function test_3pi_I1_coupled()
         v32 = Cm*pref*(sqrt(3)/3)*Float64((n2p[1]-n1p[1])*n3[1]+(n2p[2]-n1p[2])*n3[2]+(n2p[3]-n1p[3])*n3[3])*ff_all
         v33 = Cm*pref*(1/3)*Float64((n2p[1]-n1p[1])*(n2[1]-n1[1])+(n2p[2]-n1p[2])*(n2[2]-n1[2])+(n2p[3]-n1p[3])*(n2[3]-n1[3]))*ff_all
 
-        # 耦合 [3] ↔ [2,1]
+        # Coupling [3] ↔ [2,1]
         sq1  = Float64(sum(abs2,n1)); sq2  = Float64(sum(abs2,n2)); sq3  = Float64(sum(abs2,n3))
         sq1p = Float64(sum(abs2,n1p)); sq2p = Float64(sum(abs2,n2p)); sq3p = Float64(sum(abs2,n3p))
         f1_k = (1/sqrt(6))*(2*sq3-sq1-sq2); f2_k = (1/sqrt(2))*(sq2-sq1)
@@ -374,7 +374,7 @@ function test_3pi_I1_coupled()
         ComplexF64[ v11  v12  v13; v21  v22  v23; v31  v32  v33 ]
     end
 
-    # ========== 参考谱: 手动枚举, 拼接 [3] 和 [2,1] ==========
+    # ========== Reference spectrum: manually enumerate and assemble [3] and [2,1] ==========
     reps = NPHFforFVE.find_representatives(N_α_3pi; Ncut=Ncut_3pi, d=d_3pi,
         species=species_3pi, particle_types=particle_3pi)
 
@@ -410,7 +410,7 @@ function test_3pi_I1_coupled()
 
     K = length(all_states)
 
-    # 拼接 3K×3K S_big
+    # Assemble the 3K×3K S_big
     S_s = NPHFforFVE.build_S_matrix(all_states, N_α_3pi, "[3]", :boson)
     S_m = NPHFforFVE.build_S_matrix(all_states, N_α_3pi, "[2,1]", :boson)
     S_big = zeros(Float64, K*dim_total, K*dim_total)
@@ -450,13 +450,13 @@ function test_3pi_I1_coupled()
         for (nt, _) in all_states]))
     free_Ts_d = distinct_levels(free_Ts, 10)
 
-    # ========== 主体: FockSystem + V_func ==========
+    # ========== Main path: FockSystem + V_func ==========
     ch = FockChannel("3pi", [3], [:boson], [m_π_3pi], [0//1], [1//1], [-1.0],
                      NPHFforFVE.relativistic)
     sys = FockSystem(NPHFforFVE.D000, Ncut_3pi, [ch], L0_3pi, a_3pi, 1//1, OH)
     params = (Cs=Cs, Cm=Cm, Cc=Cc)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         n1p, n2p, n3p = nA; n1, n2, n3 = nB
         ff_all = ff_3pi(n1p)*ff_3pi(n2p)*ff_3pi(n3p) * ff_3pi(n1)*ff_3pi(n2)*ff_3pi(n3)
         pref = (2π * ħc_3pi / L_phys)^2
@@ -493,7 +493,7 @@ end
 
 
 # ============================================================================
-# 编排
+# Run tests
 # ============================================================================
 function test_3pi()
     ok3 = test_3pi_I3()

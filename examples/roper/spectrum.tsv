@@ -1,0 +1,31 @@
+# NPHFforFVE spectrum
+# parameter_type = RoperParams
+# parameters = RoperParams(1700.0, 0.954, -0.118, -2.892, 630.2, 1431.8, 1453.3, 0.634, -0.581, 10.0, -0.378, -1.738, 0.964, 630.2, 1431.8, 1453.3)
+# total_momentum = (0, 0, 0)
+# total_isospin = 1//2
+# V_basis = canonical
+# Ncuts = [0, 10, 10, 10]
+# channel_decomp = true
+# channel[1] = (name = "Roper_bare", species = [1], particle_types = [:fermion], masses = Union{Float64, DynamicMass}[dynamic_mass(:m_Roper_bare)], spins = Rational{Int64}[1//2], isospins = Rational{Int64}[1//2], etas = [1.0], kinetic_type = relativistic)
+# channel[2] = (name = "Npi", species = [1, 1], particle_types = [:fermion, :boson], masses = [938.0, 138.5], spins = Rational{Int64}[1//2, 0], isospins = Rational{Int64}[1//2, 1], etas = [1.0, -1.0], kinetic_type = relativistic)
+# channel[3] = (name = "Deltapi", species = [1, 1], particle_types = [:fermion, :boson], masses = [1232.0, 138.5], spins = Rational{Int64}[3//2, 0], isospins = Rational{Int64}[3//2, 1], etas = [1.0, -1.0], kinetic_type = relativistic)
+# channel[4] = (name = "Nsigma", species = [1, 1], particle_types = [:fermion, :boson], masses = [938.0, 350.0], spins = Rational{Int64}[1//2, 0], isospins = Rational{Int64}[1//2, 0], etas = [1.0, 1.0], kinetic_type = relativistic)
+# config[1] = (L = 32, a = 0.091, irreps = ["G1+"], n_levels = [8])
+# config[2] = (L = 48, a = 0.091, irreps = ["G1+"], n_levels = [8])
+config	L	a_fm	L_phys_fm	irrep	level	energy_MeV	channel_weights
+1	32	0.091	2.912	G1+	1	1289.8463656415618	Deltapi=0.0031;Npi=0.0046;Nsigma=0.9613;Roper_bare=0.0311
+1	32	0.091	2.912	G1+	2	1408.4164015083445	Deltapi=0.0118;Npi=0.5467;Nsigma=0.1074;Roper_bare=0.3341
+1	32	0.091	2.912	G1+	3	1536.5622182463264	Deltapi=0.0868;Npi=0.4019;Nsigma=0.3137;Roper_bare=0.1976
+1	32	0.091	2.912	G1+	4	1587.0357433857212	Deltapi=0.7079;Npi=0.0182;Nsigma=0.2299;Roper_bare=0.0441
+1	32	0.091	2.912	G1+	5	1644.847610411468	Deltapi=0.1221;Npi=0.3598;Nsigma=0.4563;Roper_bare=0.0617
+1	32	0.091	2.912	G1+	6	1778.8256843873953	Deltapi=0.052;Npi=0.5165;Nsigma=0.3963;Roper_bare=0.0353
+1	32	0.091	2.912	G1+	7	1856.294877829442	Deltapi=0.6871;Npi=0.0266;Nsigma=0.2549;Roper_bare=0.0313
+1	32	0.091	2.912	G1+	8	1905.641911636135	Deltapi=0.2321;Npi=0.4673;Nsigma=0.269;Roper_bare=0.0316
+2	48	0.091	4.368	G1+	1	1287.7032366018827	Deltapi=0.0027;Npi=0.1974;Nsigma=0.7682;Roper_bare=0.0316
+2	48	0.091	4.368	G1+	2	1292.6874194196319	Deltapi=0.0027;Npi=0.7479;Nsigma=0.2267;Roper_bare=0.0228
+2	48	0.091	4.368	G1+	3	1398.8994621507627	Deltapi=0.0086;Npi=0.4776;Nsigma=0.2908;Roper_bare=0.223
+2	48	0.091	4.368	G1+	4	1439.0022732798325	Deltapi=0.0008;Npi=0.3189;Nsigma=0.6773;Roper_bare=0.0029
+2	48	0.091	4.368	G1+	5	1514.2701813108522	Deltapi=0.0054;Npi=0.4187;Nsigma=0.4105;Roper_bare=0.1654
+2	48	0.091	4.368	G1+	6	1543.3176472573246	Deltapi=0.9548;Npi=0.0204;Nsigma=0.0045;Roper_bare=0.0203
+2	48	0.091	4.368	G1+	7	1566.0232385607344	Deltapi=0.0021;Npi=0.5509;Nsigma=0.4437;Roper_bare=0.0033
+2	48	0.091	4.368	G1+	8	1624.130415401285	Deltapi=0.0571;Npi=0.3779;Nsigma=0.4439;Roper_bare=0.1212

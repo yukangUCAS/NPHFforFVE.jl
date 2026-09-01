@@ -1,15 +1,15 @@
 # ==========================================================================
-# πN → πN 运动系测试 (主体代码端到端验证)
+# πN → πN moving-frame test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个 (d_total, Γ):
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every `(d_total, Γ)`:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
-#   验证: eig(H_proj) ⊂ evals_full (参考谱)
+#   Check: eig(H_proj) ⊂ evals_full (reference spectrum)
 #
 # π: s=0, I=1, boson,  η=+1, m=139.57 MeV
 # N: s=1/2, I=1/2, fermion, η=+1, m=938.92 MeV
-# 可区分粒子 → species=[1,1], κ=("[1]","[1]"), S=I
-# 运动系: D001 (C4v2), D011 (C2v2), D111 (C3v2)
+# Distinguishable particles → species=[1,1], κ=("[1]","[1]"), S=I
+# Moving frames: D001 (C4v2), D011 (C2v2), D111 (C3v2)
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -48,7 +48,7 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 参考谱构造 (含 ZM 态处理 — 仅 N 有 spin≠0 时可能触发)
+# Reference-spectrum construction (including ZM-state handling — can occur only when N has nonzero spin)
 # ============================================================================
 function _has_zm_spin_piN(rep)
     for i in 1:N_α_piN
@@ -158,7 +158,7 @@ function _build_piN_moving_reference(d_total, irrep_names)
     K = length(all_states)
     K == 0 && return Float64[]
 
-    # 动能 (CM-frame relativistic)
+    # Kinetic energy (CM-frame relativistic)
     T_diag = zeros(ComplexF64, K, K)
     for (idx, (n_tup, _)) in enumerate(all_states)
         p_mov = [pv_piN .* Float64.(n_) for n_ in n_tup]
@@ -189,10 +189,10 @@ function _build_piN_moving_reference(d_total, irrep_names)
 end
 
 # ============================================================================
-# 主代码 V_func
+# Main-code `V_func`
 # ============================================================================
 function _make_V_func_piN(d_total)
-    return function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    return function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         sp[2] == s[2] || return zero(ComplexF64)   # N spin diagonal
         pv = 2π * hc_piN / L_phys
         p_mov = [pv .* Float64.(ni) for ni in nA]
@@ -206,10 +206,10 @@ function _make_V_func_piN(d_total)
 end
 
 # ============================================================================
-# 验证函数
+# Validation function
 # ============================================================================
 function _verify_piN_moving(sys, V_func, params, ref, free_Ts, label)
-    println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
+    println("  Free energy levels (first 10 nondegenerate): $(round.(free_Ts, digits=4))")
     println()
     all_ok = true
     for Gamma in sys.selected_irreps
@@ -229,7 +229,7 @@ function _verify_piN_moving(sys, V_func, params, ref, free_Ts, label)
         @test ok
     end
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 
@@ -337,7 +337,7 @@ function test_piN_D111()
 end
 
 # ============================================================================
-# 编排
+# Run tests
 # ============================================================================
 function test_piN_moving()
     ok1 = test_piN_D001()

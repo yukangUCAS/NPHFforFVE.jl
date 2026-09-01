@@ -1,14 +1,14 @@
 # ==========================================================================
-# NN 运动系测试 (主体代码端到端验证)
+# NN moving-frame test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个 (d_total, Γ):
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every `(d_total, Γ)`:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
-#   验证: eig(H_proj) ⊂ evals_full (参考谱)
+#   Check: eig(H_proj) ⊂ evals_full (reference spectrum)
 #
-# NN: 自旋 1/2 全同费米子 (N=2, even fermions → single cover)
+# NN: identical spin-1/2 fermions (N=2, even fermions → single cover)
 # I=1 + κ=[2] → S=0 (singlet), I=0 + κ=[1,1] → S=1 (triplet)
-# 运动系: D001 (C4v), D011 (C2v), D111 (C3v)
+# Moving frames: D001 (C4v), D011 (C2v), D111 (C3v)
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -42,7 +42,7 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 参考谱构造
+# Reference-spectrum construction
 # ============================================================================
 function _build_nn_moving_reference(d_total, kappa, sign_ex, irrep_names)
     reps = NPHFforFVE.find_representatives(2; Ncut=Ncut_nn, d=d_total,
@@ -87,7 +87,7 @@ function _build_nn_moving_reference(d_total, kappa, sign_ex, irrep_names)
     K = length(all_states)
     K == 0 && return Float64[]
 
-    # 度规 S — 按 n_tuple 分组，ZM 组用 build_S_matrix_zero_momentum
+    # Metric S — grouped by `n_tuple`; ZM groups use `build_S_matrix_zero_momentum`
     S_mat = zeros(Float64, K, K)
     n_tuple_to_idxs = Dict{Tuple, Vector{Int}}()
     for (idx, (n_tup, _)) in enumerate(all_states)
@@ -107,7 +107,7 @@ function _build_nn_moving_reference(d_total, kappa, sign_ex, irrep_names)
         S_mat[idxs, idxs] .= S_grp
     end
 
-    # 动能 (CM-frame relativistic, 与主代码 _kinetic_energy_rep 一致)
+    # Kinetic energy (CM-frame relativistic; consistent with `_kinetic_energy_rep`)
     T_diag = zeros(ComplexF64, K, K)
     for (idx, (n_tup, _)) in enumerate(all_states)
         p_mov = [pv_nn .* Float64.(n_) for n_ in n_tup]
@@ -150,10 +150,10 @@ function _build_nn_moving_reference(d_total, kappa, sign_ex, irrep_names)
 end
 
 # ============================================================================
-# 主代码 V_func
+# Main-code `V_func`
 # ============================================================================
 function _make_V_func_nn(d_total, sign_ex)
-    return function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    return function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         diag = (sp[1] == s[1] && sp[2] == s[2]) ? 1.0 : 0.0
         exch = (sp[1] == s[2] && sp[2] == s[1]) ? 1.0 : 0.0
         sf = diag + sign_ex * exch
@@ -170,10 +170,10 @@ function _make_V_func_nn(d_total, sign_ex)
 end
 
 # ============================================================================
-# 验证函数
+# Validation function
 # ============================================================================
 function _verify_nn_moving(sys, V_func, params, ref, free_Ts, label)
-    println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
+    println("  Free energy levels (first 10 nondegenerate): $(round.(free_Ts, digits=4))")
     println()
     all_ok = true
     for Gamma in sys.selected_irreps
@@ -193,7 +193,7 @@ function _verify_nn_moving(sys, V_func, params, ref, free_Ts, label)
         @test ok
     end
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 
@@ -295,7 +295,7 @@ function test_nn_D111()
 end
 
 # ============================================================================
-# 编排
+# Run tests
 # ============================================================================
 function test_nn_moving()
     ok1 = test_nn_D001()

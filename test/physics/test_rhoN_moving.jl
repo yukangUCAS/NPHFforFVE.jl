@@ -1,15 +1,15 @@
 # ==========================================================================
-# ρN → ρN 运动系测试 (主体代码端到端验证)
+# ρN → ρN moving-frame test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个 (d_total, Γ):
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every `(d_total, Γ)`:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
-#   验证: eig(H_proj) ⊂ evals_full (参考谱)
+#   Check: eig(H_proj) ⊂ evals_full (reference spectrum)
 #
 # ρ: s=1, I=1, boson,  η=-1, m=770 MeV
 # N: s=1/2, I=1/2, fermion, η=+1, m=938.92 MeV
-# 可区分粒子 → species=[1,1], κ=("[1]","[1]"), S=I
-# 运动系: D001 (C4v2), D011 (C2v2), D111 (C3v2)
+# Distinguishable particles → species=[1,1], κ=("[1]","[1]"), S=I
+# Moving frames: D001 (C4v2), D011 (C2v2), D111 (C3v2)
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -48,7 +48,7 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 参考谱构造 (含 ZM 态处理)
+# Reference-spectrum construction (including ZM-state handling)
 # ============================================================================
 function _has_zm_spin_rhoN(rep)
     for i in 1:N_α_rhoN
@@ -158,7 +158,7 @@ function _build_rhoN_moving_reference(d_total, irrep_names)
     K = length(all_states)
     K == 0 && return Float64[]
 
-    # 动能 (CM-frame relativistic)
+    # Kinetic energy (CM-frame relativistic)
     T_diag = zeros(ComplexF64, K, K)
     for (idx, (n_tup, _)) in enumerate(all_states)
         p_mov = [pv_rhoN .* Float64.(n_) for n_ in n_tup]
@@ -190,10 +190,10 @@ function _build_rhoN_moving_reference(d_total, irrep_names)
 end
 
 # ============================================================================
-# 主代码 V_func
+# Main-code V_func
 # ============================================================================
 function _make_V_func_rhoN(d_total)
-    return function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    return function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         sp[1] == s[1] || return zero(ComplexF64)
         sp[2] == s[2] || return zero(ComplexF64)
         pv = 2π * hc_rhoN / L_phys
@@ -208,10 +208,10 @@ function _make_V_func_rhoN(d_total)
 end
 
 # ============================================================================
-# 验证函数
+# Validation function
 # ============================================================================
 function _verify_rhoN_moving(sys, V_func, params, ref, free_Ts, label)
-    println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
+    println("  Free energy levels (first 10 nondegenerate): $(round.(free_Ts, digits=4))")
     println()
     all_ok = true
     for Gamma in sys.selected_irreps
@@ -231,7 +231,7 @@ function _verify_rhoN_moving(sys, V_func, params, ref, free_Ts, label)
         @test ok
     end
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 
@@ -336,7 +336,7 @@ function test_rhoN_D111()
 end
 
 # ============================================================================
-# 编排
+# Run tests
 # ============================================================================
 function test_rhoN_moving()
     ok1 = test_rhoN_D001()

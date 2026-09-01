@@ -1,14 +1,14 @@
 # ==========================================================================
-# ππ → ππ 运动系测试 (主体代码端到端验证)
+# ππ → ππ moving-frame test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个 (d_total, Γ):
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every `(d_total, Γ)`:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
-#   验证: eig(H_proj) ⊂ evals_full (参考谱)
+#   Check: eig(H_proj) ⊂ evals_full (reference spectrum)
 #
-# ππ: 自旋 0 全同玻色子, I=2, κ=[2]
-# 接触势 V = C0 * cutoff (CM-frame boost)
-# 运动系: D001 (C4v), D011 (C2v), D111 (C3v)
+# ππ: identical spin-0 bosons, I=2, κ=[2]
+# Contact interaction V = C0 * cutoff (CM-frame boost)
+# Moving frames: D001 (C4v), D011 (C2v), D111 (C3v)
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -41,7 +41,7 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 参考谱构造 (含 ZM 态，与主代码一致)
+# Reference-spectrum construction (including ZM states; consistent with the main code)
 # ============================================================================
 function _build_pipi_moving_reference(d_total, irrep_names, Ncut)
     reps = NPHFforFVE.find_representatives(2; Ncut=Ncut, d=d_total,
@@ -51,7 +51,7 @@ function _build_pipi_moving_reference(d_total, irrep_names, Ncut)
     state_to_idx = Dict()
 
     for rep in reps
-        # spin-0: 只有全零螺旋度
+        # spin-0: only zero helicities occur
         hel_configs = [ntuple(_ -> 0.0, 2)]
         for hel in hel_configs, Gamma in irrep_names
             result = NPHFforFVE.subspace_projection(rep, hel, "[2]", Gamma;
@@ -69,10 +69,10 @@ function _build_pipi_moving_reference(d_total, irrep_names, Ncut)
     K = length(all_states)
     K == 0 && return Float64[]
 
-    # 度规 S (全同玻色子: direct + exchange)
+    # Metric S (identical bosons: direct + exchange)
     S_mat = NPHFforFVE.build_S_matrix(all_states, 2, "[2]", :boson)
 
-    # 动能 (CM-frame relativistic, 与主代码 _kinetic_energy_rep 一致)
+    # Kinetic energy (CM-frame relativistic; consistent with `_kinetic_energy_rep`)
     T_diag = zeros(ComplexF64, K, K)
     for (idx, (n_tup, _)) in enumerate(all_states)
         p_mov = [pv_pp .* Float64.(n_) for n_ in n_tup]
@@ -112,10 +112,10 @@ function _build_pipi_moving_reference(d_total, irrep_names, Ncut)
 end
 
 # ============================================================================
-# 主代码 V_func
+# Main-code `V_func`
 # ============================================================================
 function _make_V_func_pipi(d_total)
-    return function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    return function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         pv = 2π * hc_pp / L_phys
         pA_mov = [pv .* Float64.(n) for n in nA]
         pB_mov = [pv .* Float64.(n) for n in nB]
@@ -129,10 +129,10 @@ function _make_V_func_pipi(d_total)
 end
 
 # ============================================================================
-# 验证函数
+# Validation function
 # ============================================================================
 function _verify_pipi_moving(sys, V_func, params, ref, free_Ts, label)
-    println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
+    println("  Free energy levels (first 10 nondegenerate): $(round.(free_Ts, digits=4))")
     println()
     all_ok = true
     for Gamma in sys.selected_irreps
@@ -152,7 +152,7 @@ function _verify_pipi_moving(sys, V_func, params, ref, free_Ts, label)
         @test ok
     end
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 
@@ -233,7 +233,7 @@ function test_pipi_D111()
 end
 
 # ============================================================================
-# 编排
+# Run tests
 # ============================================================================
 function test_pipi_moving()
     ok1 = test_pipi_D001()

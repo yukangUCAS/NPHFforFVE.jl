@@ -8,3 +8,10 @@ demo/slides.html
 .DS_Store
 __pycache__/
 *.pyc
+# Generated calculation outputs
+*.jls
+test_I_matrix_output.txt
+test_X_matrix_output.txt
+
+# Local development material not included in public releases
+development/

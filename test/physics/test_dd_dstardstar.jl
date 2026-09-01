@@ -1,17 +1,17 @@
 # ==========================================================================
-# DD + D*D* 耦合道体系测试 (I=1, κ="[2]")
+# DD + D*D* coupled-channel system test (I=1, κ="[2]")
 #
-# DD:   两个全同 s=0 玻色子, I=1 → κ="[2]" (空间对称)
-# D*D*: 两个全同 s=1 玻色子, I=1 → κ="[2]" (空间对称, 自旋对称 S=0,2)
+# DD:   two identical s=0 bosons, I=1 → κ="[2]" (spatialsymmetric)
+# D*D*: two identical s=1 bosons, I=1 → κ="[2]" (spatialsymmetric, spinsymmetric S=0,2)
 #
-# 相互作用:
+# interaction:
 #   ⟨DD|V|DD⟩ = C_DD
 #   ⟨DD|V|D*D*,σ₁,σ₂⟩ = C_mix × (−1)^{σ₁} × δ_{σ₁,−σ₂}
 #   ⟨D*D*|V|D*D*⟩ = C_22 × (δ_{σ₁σ₁'}δ_{σ₂σ₂'} + δ_{σ₁σ₂'}δ_{σ₂σ₁'})
 #
-# 主体代码: FockSystem + build_hamiltonian_block
-# 参考代码: H_raw = T·S + fv·V_hel, GEP(H_raw, S)
-# 验证: eig(H_proj) ⊂ eig(H_raw, S)
+# Main code: FockSystem + build_hamiltonian_block
+# Reference code: H_raw = T·S + fv·V_hel, GEP(H_raw, S)
+# Check: eig(H_proj) ⊂ eig(H_raw, S)
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -52,10 +52,10 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 构造参考谱 (H_raw = T·S + fv·V_hel, GEP)
+# Construct the reference spectrum (H_raw = T·S + fv·V_hel, GEP)
 # ============================================================================
 function _build_reference()
-    # ---- DD 道 (species=[2], s=0) ----
+    # ---- DD channel (species=[2], s=0) ----
     reps = NPHFforFVE.find_representatives(2; Ncut=Ncut_cc, d=d_cc,
         species=[2], particle_types=[:boson])
 
@@ -82,7 +82,7 @@ function _build_reference()
     end
     K_DD = length(all_states_DD)
 
-    # ---- D*D* 道 (species=[2], s=1) ----
+    # ---- D*D* channel (species=[2], s=1) ----
     all_states_DsDs = []
     sd_DsDs = Dict()
     proj_DsDs = []
@@ -90,7 +90,7 @@ function _build_reference()
     for rep in reps
         M_zm = count(n -> n == d_cc, rep)
         h_reps = if M_zm > 0
-            # ZM 粒子自旋非零，螺旋度无定义，直接走 ZM 管线
+            # ZM particles have nonzero spin, helicity is undefined, and the ZM pipeline is used directly
             [ntuple(_ -> 0.0, 2)]
         else
             NPHFforFVE.helicity_representatives(rep;
@@ -119,10 +119,10 @@ function _build_reference()
     K_DsDs = length(all_states_DsDs)
     K = K_DD + K_DsDs
 
-    # ---- S 矩阵 (按 n_tuple 分组，ZM 用 build_S_matrix_zero_momentum) ----
+    # ---- S matrix (grouped by n_tuple; ZM states use build_S_matrix_zero_momentum) ----
     S_mat = zeros(Float64, K, K)
 
-    # DD 道 (κ="[2]", boson)
+    # DD channel (κ="[2]", boson)
     n_to_idxs_DD = Dict{Tuple, Vector{Int}}()
     for (idx, (n_tup, _)) in enumerate(all_states_DD)
         idxs = get!(Vector{Int}, n_to_idxs_DD, n_tup)
@@ -140,7 +140,7 @@ function _build_reference()
         S_mat[idxs, idxs] .= S_DD
     end
 
-    # D*D* 道 (κ="[2]", boson)
+    # D*D* channel (κ="[2]", boson)
     n_to_idxs_DsDs = Dict{Tuple, Vector{Int}}()
     for (idx, (n_tup, _)) in enumerate(all_states_DsDs)
         idxs = get!(Vector{Int}, n_to_idxs_DsDs, n_tup)
@@ -169,7 +169,7 @@ function _build_reference()
                                          for n_ in n_tup)
     end
 
-    # ---- V_can 函数 ----
+    # ---- V_can function ----
     function V_DD_can(np, sp, n, s, extra...)
         n1p, n2p = np; n1, n2 = n
         ComplexF64(C_DD_cc * ff_cc(n1p)*ff_cc(n2p)*ff_cc(n1)*ff_cc(n2))
@@ -211,7 +211,7 @@ function _build_reference()
     # ---- H_raw = T_diag * S_mat + fv * V_hel ----
     H_raw = T_diag * S_mat + fv_factor_cc * V_hel
 
-    # ---- GEP (处理 S 半正定性) ----
+    # ---- GEP (handle positive semidefiniteness of S) ----
     S_eig = eigen(Hermitian(S_mat))
     good_S = S_eig.values .> 1e-12
     evals_full = if all(good_S)
@@ -231,16 +231,16 @@ function _build_reference()
 end
 
 # ============================================================================
-# 测试主体
+# test
 # ============================================================================
 function test_dd_dstardstar()
-    println("DD + D*D* 耦合道  I=1  κ=[2]  Ncut=$Ncut_cc")
+    println("DD + D*D* coupled channels  I=1  κ=[2]  Ncut=$Ncut_cc")
     println()
 
     ref = _build_reference()
     println("K = $(ref.K) (DD:$(ref.K_DD), D*D*:$(ref.K_DsDs)),  ref eigenvalues = $(length(ref.evals_full))")
 
-    # 全局自由动能 (DD + D*D* 所有唯一 n_tuple，按各道质量)
+    # Global free kinetic energy (all unique n_tuple values for DD + D*D*, using the mass of each channel)
     free_Ts = Float64[]
     for (nt, _) in ref.all_states_DD
         push!(free_Ts, sum(sqrt(m_D^2 + pref_T_cc * Float64(sum(abs2, n_))) for n_ in nt))
@@ -249,7 +249,7 @@ function test_dd_dstardstar()
         push!(free_Ts, sum(sqrt(m_Ds^2 + pref_T_cc * Float64(sum(abs2, n_))) for n_ in nt))
     end
     free_Ts_d = distinct_levels(sort(unique!(free_Ts)), 10)
-    println("  自由能级 (前10非简并): $(round.(free_Ts_d, digits=4))")
+    println("  Free energy levels (first 10 nondegenerate): $(round.(free_Ts_d, digits=4))")
     println()
 
     # ---- FockSystem ----
@@ -260,7 +260,7 @@ function test_dd_dstardstar()
     sys = FockSystem(NPHFforFVE.D000, Ncut_cc, [ch_DD, ch_DsDs], L0_cc, a_cc, 1//1, OH)
     params = (C_DD=C_DD_cc, C_mix=C_mix_cc, C_22=C_22_cc)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         ff_nA = prod(n_ -> 1.0 / (1.0 + Float64(sum(abs2, n_)) / (Λ_cc/(2π*ħc_cc/L_phys))^2)^2, nA)
         ff_nB = prod(n_ -> 1.0 / (1.0 + Float64(sum(abs2, n_)) / (Λ_cc/(2π*ħc_cc/L_phys))^2)^2, nB)
         ffall = ff_nA * ff_nB
@@ -304,7 +304,7 @@ function test_dd_dstardstar()
     end
 
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 

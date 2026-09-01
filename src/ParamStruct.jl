@@ -1,5 +1,5 @@
 # ============================================================
-# ParamStruct — @params macro for JuMinuit-compatible parameter structs
+# ParamStruct — @params macro for potential and fit parameter structs
 # ============================================================
 #
 # Usage:
@@ -19,39 +19,17 @@
 #   5. param_names(T)     — ["C0", "C1", "Lambda"]
 #   6. param_defaults(T)  — (C0=1.0, C1=0.5, Λ=4.0) (NamedTuple)
 #
-# Optionally override for your type:
-#
-#     function param_bounds(::Type{MyParams})
-#         return [(0.0, Inf), (0.0, Inf), (0.0, Inf)]
-#     end
-#     function param_errors(::Type{MyParams})
-#         return [0.1, 0.1, 0.1]
-#     end
-#
 # ============================================================
 # Integration with potential definitions:
 #
 # In potential_defs.jl, the V functions accept params as last argument:
 #
-#     function my_V_11(p, k, sp, s, kapA, kapB, rA, rB, aA, aB, params::MyParams)
+#     function my_V_11(p, k, sp, s, kapA, kapB, rA, rB, params::MyParams)
 #         return params.C0 + params.C1 * q_sq(p, k)
 #     end
 #
 # ============================================================
-# JuMinuit workflow:
-#
-#     p0 = MyParams()                          # defaults
-#     x0 = to_vector(p0)                       # -> [1.0, 0.5, 4.0]
-#     names = param_names(MyParams)             # -> ["C0", "C1", "Lambda"]
-#     limits = param_limits(MyParams)           # -> [(0,nothing), nothing, ...]
-#
-#     m = Minuit(chi2_fcn, x0; names, errors=param_errors(MyParams), limits)
-#     migrad!(m)
-#     p_best = from_vector(MyParams, m.values)
-# ============================================================
-#
-# ============================================================
-#  宏实现 — 供内部使用，用户只需调用 @params
+# Macro implementation — users only need to call @params
 # ============================================================
 
 # Generic function placeholders — @params adds specific methods
@@ -137,7 +115,11 @@ macro params(expr)
                                         Expr(:(::), Expr(:curly, :Type, name))),
                         Expr(:call, Expr(:curly, :NamedTuple, def_names), def_vals))
 
-    struct_ctor = Expr(:block,
+    # Generate re-entrant safe code
+    new_fields_tuple = Expr(:tuple, [QuoteNode(f) for f in fields]...)
+    name_sym = QuoteNode(name)
+
+    struct_and_helpers = Expr(:block,
         Expr(:struct, false, name, Expr(:block, field_exprs..., pos_ctor, constructor)),
         to_vec,
         from_vec,
@@ -145,75 +127,45 @@ macro params(expr)
         param_def_fn,
     )
 
-    return esc(struct_ctor)
-end
-
-# ============ JuMinuit 辅助函数（用户可按需覆盖） ============
-
-"""
-    param_bounds(::Type{T}) -> Vector{Tuple{Float64,Float64}}
-
-返回参数边界 `[(lower, upper), ...]`。默认所有参数 (0.0, Inf)。
-用户应为自己的参数类型覆盖此函数。
-"""
-function param_bounds(::Type{T}) where T
-    names = param_names(T)
-    return [(0.0, Inf) for _ in names]
-end
-
-"""
-    param_errors(::Type{T}) -> Vector{Float64}
-
-返回 JuMinuit 的初始步长。默认全部 0.1。
-覆盖此函数以设置每个参数合适的初始步长。
-"""
-function param_errors(::Type{T}) where T
-    return fill(0.1, param_count(T))
-end
-
-"""
-    param_limits(::Type{T}) -> Vector
-
-将 `param_bounds` 转换为 JuMinuit 的 limits 格式:
-- 双边界: `(lo, up)`
-- 无界: `nothing`
-- 仅下界: `(lo, nothing)`
-- 仅上界: `(nothing, up)`
-
-可直接传入 `Minuit(fcn, x0; limits=param_limits(MyParams))`。
-"""
-function param_limits(::Type{T}) where T
-    bounds = param_bounds(T)
-    result = Vector{Any}(undef, length(bounds))
-    for (i, (lo, up)) in enumerate(bounds)
-        has_lo = isfinite(lo) && lo > -Inf
-        has_up = isfinite(up) && up < Inf
-        result[i] = if has_lo && has_up
-            (lo, up)
-        elseif has_lo
-            (lo, nothing)
-        elseif has_up
-            (nothing, up)
+    safe_code = quote
+        if isdefined(@__MODULE__, $name_sym)
+            existing_fields = fieldnames($name)
+            new_fields = $new_fields_tuple
+            if existing_fields == new_fields
+                # Fields are unchanged: safely skip the struct definition and refresh helper methods.
+                $to_vec
+                $from_vec
+                $param_names_fn
+                $param_def_fn
+            else
+                error("""
+                    Cannot redefine struct $($name) with different fields.
+                    Existing fields: $existing_fields
+                    New fields:      $new_fields
+                    → Please restart the Julia kernel and re-run.
+                    """)
+            end
         else
-            nothing
+            $struct_and_helpers
         end
     end
-    return result
+
+    return esc(safe_code)
 end
 
-# ============ 便利函数 ============
+# ============ Convenience functions ============
 
 """
     param_count(::Type{T}) -> Int
 
-返回参数总数。
+Return the number of parameters.
 """
 param_count(::Type{T}) where T = length(param_names(T))
 
 """
     print_params(p)
 
-打印参数名和当前值，方便查看。
+Print parameter names and their current values.
 """
 function print_params(p)
     T = typeof(p)

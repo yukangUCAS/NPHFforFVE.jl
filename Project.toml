@@ -1,14 +1,22 @@
 name = "NPHFforFVE"
-uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+uuid = "9476f454-5f83-4bcd-b907-35fdf1880fdc"
 authors = ["yukang"]
 version = "0.1.0"
 
 [deps]
 KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
+[weakdeps]
+NativeMinuit = "5523a57a-07f4-4aae-a9fd-d526bcb5d194"
+
+[extensions]
+NPHFforFVENativeMinuitExt = "NativeMinuit"
+
 [compat]
+NativeMinuit = "0.7"
 KrylovKit = "0.10.3"
 StaticArrays = "1"
 julia = "1.10"

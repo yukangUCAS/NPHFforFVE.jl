@@ -1,17 +1,17 @@
 # ==========================================================================
-# D*D* → D*D* 测试 (主体代码端到端验证)
+# D*D* → D*D* test (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个不可约表示 Γ:
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every irrep Γ:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
 #   evals_full = eig(H_raw, S)
-#   验证: eig(H_proj) ⊂ evals_full
+#   Check: eig(H_proj) ⊂ evals_full
 #
 # D*: s=1, I=1/2, boson, η=+1, m=2008.5 MeV
-# 全同玻色子 × 2
+# identical bosons × 2
 #
-# I=1 (isospin 对称) + κ=[2] (空间对称) → 自旋对称 (S=0,2): sign_spin = +1
-# I=0 (isospin 反对称) + κ=[1,1] (空间反对称) → 自旋反对称 (S=1): sign_spin = -1
+# I=1 (isospin symmetric) + κ=[2] (spatialsymmetric) → spinsymmetric (S=0,2): sign_spin = +1
+# I=0 (isospin antisymmetric) + κ=[1,1] (spatial antisymmetric) → spin antisymmetric (S=1): sign_spin = -1
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -52,7 +52,7 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
 end
 
 # ============================================================================
-# 构造参考谱
+# Construct the reference spectrum
 # ============================================================================
 function _build_dstardstar_reference(kappa, sign_spin)
     function V_can_func(np, sp, n, s, extra...)
@@ -76,7 +76,7 @@ function _build_dstardstar_reference(kappa, sign_spin)
     for rep in reps
         M_zm = count(n -> n == d_dsds, rep)
         h_reps = if M_zm > 0
-            # ZM 粒子自旋非零，螺旋度无定义，直接走 ZM 管线
+            # ZM particles have nonzero spin, helicity is undefined, and the ZM pipeline is used directly
             [ntuple(_ -> 0.0, N_α_dsds)]
         else
             NPHFforFVE.helicity_representatives(rep;
@@ -109,7 +109,7 @@ function _build_dstardstar_reference(kappa, sign_spin)
 
     K = length(all_states)
 
-    # S matrix: 按 n_tuple 分组，ZM 组用 build_S_matrix_zero_momentum
+    # S matrix: grouped by n_tuple; ZM groups use build_S_matrix_zero_momentum
     S_big = zeros(Float64, K, K)
     n_tuple_to_idxs = Dict{Tuple, Vector{Int}}()
     for (idx, (n_tup, _)) in enumerate(all_states)
@@ -120,7 +120,7 @@ function _build_dstardstar_reference(kappa, sign_spin)
     for (n_tup, idxs) in n_tuple_to_idxs
         M_zm = count(n -> n == M_dsds(0,0,0), n_tup)
         if M_zm == N_α_dsds
-            # 全 ZM: 用 build_S_matrix_zero_momentum 包含完整交换耦合
+            # all ZM: use build_S_matrix_zero_momentum with the full exchange coupling
             spin_tuples = [all_states[idx][2] for idx in idxs]
             S_grp = NPHFforFVE.build_S_matrix_zero_momentum(M_zm, spin_tuples,
                 [(Tuple{}(), Tuple{}())], N_α_dsds, kappa, :boson)
@@ -145,7 +145,7 @@ function _build_dstardstar_reference(kappa, sign_spin)
     fv_factor = (2π * ħc_dsds / L_phys_dsds)^(dd / 2)
     H_raw = T_diag * S_big + fv_factor * V_hel
 
-    # 广义本征值
+    # Generalized eigenvalue problem
     S_eig = eigen(Hermitian(S_big))
     good_S = S_eig.values .> 1e-12
     if all(good_S)
@@ -162,11 +162,11 @@ function _build_dstardstar_reference(kappa, sign_spin)
 end
 
 # ============================================================================
-# 验证主体代码
+# Validate the main code
 # ============================================================================
 function _verify_dstardstar(sys, V_func, params, ref, free_Ts, label)
-    # 自由能级 (全局，不区分 irrep)
-    println("  自由能级 (前10非简并): $(round.(free_Ts, digits=4))")
+    # Free energy levels (global, independent of irrep)
+    println("  Free energy levels (first 10 nondegenerate): $(round.(free_Ts, digits=4))")
     println()
 
     all_ok = true
@@ -188,12 +188,12 @@ function _verify_dstardstar(sys, V_func, params, ref, free_Ts, label)
         @test ok
     end
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 
 # ============================================================================
-# I=1: κ=[2], 自旋对称 sign_spin = +1 (S=0,2)
+# I=1: κ=[2], spinsymmetric sign_spin = +1 (S=0,2)
 # ============================================================================
 function test_dstardstar_I1()
     kappa = "[2]"
@@ -203,7 +203,7 @@ function test_dstardstar_I1()
     println("D*D* → D*D*  I=1  κ=[2]  S=0,2  Ncut=$Ncut_dsds")
     println("K = $(ref.K) states,  reference eigenvalues = $(length(ref.evals_full))")
 
-    # 全局自由动能 (从参考态提取唯一 n_tuple)
+    # Global free kinetic energy (extract unique n_tuple values from reference states)
     free_Ts = sort(unique(Float64[
         sum(sqrt(m_^2 + pref_T_dsds * Float64(sum(abs2, n_)))
             for (n_, m_) in zip(nt, per_mass_dsds))
@@ -217,7 +217,7 @@ function test_dstardstar_I1()
                      NPHFforFVE.SymmetryGroup.OH_IRREP_NAMES)
     params = (C0=C0_dsds,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         diag = (sp[1] == s[1] && sp[2] == s[2]) ? 1.0 : 0.0
         exch = (sp[1] == s[2] && sp[2] == s[1]) ? 1.0 : 0.0
         sf = diag + sign_spin * exch
@@ -232,7 +232,7 @@ function test_dstardstar_I1()
 end
 
 # ============================================================================
-# I=0: κ=[1,1], 自旋反对称 sign_spin = -1 (S=1)
+# I=0: κ=[1,1], spin antisymmetric sign_spin = -1 (S=1)
 # ============================================================================
 function test_dstardstar_I0()
     kappa = "[1,1]"
@@ -255,7 +255,7 @@ function test_dstardstar_I0()
                      NPHFforFVE.SymmetryGroup.OH_IRREP_NAMES)
     params = (C0=C0_dsds,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         diag = (sp[1] == s[1] && sp[2] == s[2]) ? 1.0 : 0.0
         exch = (sp[1] == s[2] && sp[2] == s[1]) ? 1.0 : 0.0
         sf = diag + sign_spin * exch
@@ -270,7 +270,7 @@ function test_dstardstar_I0()
 end
 
 # ============================================================================
-# 编排
+# Run tests
 # ============================================================================
 function test_dstardstar()
     ok1 = test_dstardstar_I1()

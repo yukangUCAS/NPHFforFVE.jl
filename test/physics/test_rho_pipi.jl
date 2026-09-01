@@ -1,15 +1,15 @@
 # ==========================================================================
-# ρ → ππ 耦合道测试 (主体代码端到端验证)
+# ρ → ππ coupled channelstest (end-to-end validation of the main code)
 #
-# 使用 FockSystem + build_hamiltonian_block 验证用户调用的主体代码正确性。
-# 对每个不可约表示 Γ:
+# Use `FockSystem` and `build_hamiltonian_block` to validate the main public calculation path.
+# For every irrep Γ:
 #   H_proj = build_hamiltonian_block(sys, Γ, V_func, params)
 #   evals_full = eig(H_raw)
-#   验证: eig(H_proj) ⊂ evals_full
+#   Check: eig(H_proj) ⊂ evals_full
 #
 # ρ: s=1, η=-1, m=800 MeV, N=1
 # ππ: s=0 each, η=+1, m=140 MeV, N=2, I=1
-# 耦合: ⟨ππ,k|V|ρ,σ⟩ = g * (2πħc/L) * fm_poly(σ, k)
+# Coupling: ⟨ππ,k|V|ρ,σ⟩ = g * (2πħc/L) * fm_poly(σ, k)
 # ==========================================================================
 
 using NPHFforFVE, StaticArrays, LinearAlgebra, Test
@@ -39,7 +39,7 @@ function distinct_levels(evals::Vector{Float64}, n::Int; tol::Float64=1e-8)
     return distinct
 end
 
-# f_m 多项式
+# f_m polynomial
 function fm_rp(m::Int, n::Momentum)
     nx, ny, nz = Float64(n[1]), Float64(n[2]), Float64(n[3])
     if m == 0
@@ -54,7 +54,7 @@ function fm_rp(m::Int, n::Momentum)
 end
 
 # ============================================================================
-# 构造参考谱 (每个不可约表示单独计算)
+# Construct the reference spectrum (each irrep is computed separately)
 # ============================================================================
 function _build_rho_pipi_reference_per_irrep(Gamma)
     ch_rho = FockChannel("rho", [1], [:boson], [m_ρ_rp],
@@ -88,7 +88,7 @@ function _build_rho_pipi_reference_per_irrep(Gamma)
     dim_pipi = sum(p.n_r for p in projs_pipi; init=0)
     dim_rho == 0 && dim_pipi == 0 && return nothing
 
-    # 收集态
+    # collect states
     rho_states = []; rho_to_idx = Dict()
     for p in projs_rho
         for st in p.states
@@ -130,7 +130,7 @@ function _build_rho_pipi_reference_per_irrep(Gamma)
         return zero(ComplexF64)
     end
 
-    # V_hel 全空间
+    # V_hel full space
     V_hel = zeros(ComplexF64, K, K)
     if Kr > 0 && Kp > 0
         V_hel[Kr+1:end, 1:Kr] .= NPHFforFVE.build_V_hel(
@@ -139,7 +139,7 @@ function _build_rho_pipi_reference_per_irrep(Gamma)
             rho_states, pipi_states, per_spin_rho, per_spin_pipi, V_can_func)
     end
 
-    # FV 因子: dd = 3*(N_α+N_β)-6
+    # FV factor: dd = 3*(N_α+N_β)-6
     d_cross = 3*(1+2)-6; fv_cross = (2π * ħc_rp / L_phys_rp)^(d_cross/2)
     d_pipi = 3*(2+2)-6; fv_pipi = (2π * ħc_rp / L_phys_rp)^(d_pipi/2)
     Fv = ones(ComplexF64, K, K)
@@ -156,10 +156,10 @@ function _build_rho_pipi_reference_per_irrep(Gamma)
 end
 
 # ============================================================================
-# 测试主体
+# test
 # ============================================================================
 function test_rho_pipi()
-    println("ρ → ππ 耦合道  I=1  Ncut=$Ncut_rp")
+    println("ρ–ππ coupled-channel system  I=1  Ncut=$Ncut_rp")
     println()
 
     ch_rho = FockChannel("rho", [1], [:boson], [m_ρ_rp],
@@ -170,7 +170,7 @@ function test_rho_pipi()
                      irrep_names_rp)
     params = (g=g_rp,)
 
-    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, aA, aB, chA, chB, L_phys, p)
+    function V_func(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys, p)
         if length(nA) == 2 && length(nB) == 1
             # ππ (bra) ← ρ (ket)
             k, σ = nA[1], Int(s[1])
@@ -210,13 +210,13 @@ function test_rho_pipi()
         ok = matched == length(evals_proj)
         all_ok = all_ok && ok
         status = ok ? "✓" : "✗"
-        println("  自由能级: $(round.(free_Ts_d, digits=4))")
+        println("  Free energy levels: $(round.(free_Ts_d, digits=4))")
         println("  $Gamma: dim=$dim_total (ρ=$(ref.dim_rho) ππ=$(ref.dim_pipi)) matched=$matched/$(length(evals_proj)) K=$(ref.K)  $status  [$(round.(di, digits=4))]")
         @test ok
     end
 
     println()
-    println(all_ok ? "全部通过 ✓" : "存在失败 ✗")
+    println(all_ok ? "All checks passed ✓" : "Some checks failed ✗")
     return all_ok
 end
 
