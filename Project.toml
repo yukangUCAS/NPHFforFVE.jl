@@ -1,7 +1,7 @@
 name = "NPHFforFVE"
 uuid = "9476f454-5f83-4bcd-b907-35fdf1880fdc"
 authors = ["yukang"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 KrylovKit = "0b1a1467-8014-51b9-945f-bf0ae24f4b77"

@@ -272,7 +272,10 @@ function build_V_hel(subspace_states_α::Vector,
     # Thread-local block-buffer pool (avoid per-pair zeros allocations)
     blk_rows = dim_σα * dim_κA
     blk_cols = dim_σβ * dim_κB
-    n_threads = Threads.nthreads()
+    # threadid() is global across Julia's default and interactive thread
+    # pools, whereas nthreads() counts only one pool. Allocate by the
+    # largest possible thread ID so a split thread-pool setup is safe.
+    n_threads = Threads.maxthreadid()
     block_pool = [zeros(ComplexF64, blk_rows, blk_cols) for _ in 1:n_threads]
 
     # Per-thread triplet buffer
@@ -387,8 +390,9 @@ function build_V_hel_direct(subspace_states_α::Vector,
     m = K_α * dim_κA
     n = K_β * dim_κB
 
-    # Per-thread triplet buffer
-    n_threads = Threads.nthreads()
+    # Per-thread triplet buffer. threadid() spans all Julia thread pools;
+    # therefore allocate by its global bound rather than nthreads().
+    n_threads = Threads.maxthreadid()
     triplets = [Tuple{Int,Int,ComplexF64}[] for _ in 1:n_threads]
 
     n_pairs = K_α * K_β
