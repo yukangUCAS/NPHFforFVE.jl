@@ -1660,7 +1660,7 @@ end
 """
     compute_kinetic_spectrum(sys::FockSystem, params=nothing) -> Dict{String, Vector{Float64}}
 
-Kinetic-only (no interaction) eigenvalues. Systems containing `dynamic_mass` must provide
+Kinetic-only (no interaction) eigenvalues. Systems containing `mass_unfixed` must provide
 `params`；Fixed-mass systems retain the original calling convention.
 """
 function compute_kinetic_spectrum(sys::FockSystem, params=nothing)

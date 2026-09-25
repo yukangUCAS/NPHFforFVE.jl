@@ -19,6 +19,7 @@ Configuration specified by one call to `add_config!`.
 Fields:
 - `L::Int`: lattice extent
 - `a::Float64`: lattice spacing in fm
+- `m_pi::Union{Nothing,Float64}`: pion mass in MeV, or `nothing` when omitted
 - `irreps`: irreducible representations to compute
 - `n_levels`: requested number of lowest levels for each irrep, in the same order as `irreps`
 """
@@ -27,7 +28,14 @@ struct Config
     a::Float64
     irreps::Vector{String}
     n_levels::Vector{Int}
+    m_pi::Union{Nothing,Float64}
 end
+
+Config(L::Int, a::Real, irreps::Vector{String}, n_levels::Vector{Int}) =
+    Config(L, Float64(a), irreps, n_levels, nothing)
+
+struct _MpiNotProvided end
+const _MPI_NOT_PROVIDED = _MpiNotProvided()
 
 """
     Project
@@ -107,15 +115,16 @@ function Project(d, I::Rational{Int}, channels::Vector{FockChannel}, Ncuts::Vect
 end
 
 """
-    add_config!(proj::Project, L::Int, a, irreps, n_levels) -> Int
+    add_config!(proj::Project, L::Int, a, irreps, n_levels; [m_pi]) -> Int
 
-Add one `(L,a,Γ,n)` configuration and return its one-based index, which can subsequently be used as `result[idx]`.
+Add one `(L,a,Γ,n)` configuration and return its one-based index, which can subsequently be used as `result[idx]`. Optionally record the pion mass with `m_pi=<value>`.
 
 # Arguments
 - `L`: finite-volume lattice extent
 - `a`: lattice spacing in fm
 - `irreps`: irreducible representations of `O_h` to compute
 - `n_levels`: requested number of lowest levels for each irrep, with the same length as `irreps`
+- `m_pi`: optional pion mass in MeV. Omit the keyword for the legacy configuration form; explicitly passing `nothing` is not allowed.
 
 # Returns
 The one-based configuration index for accessing the result of `compute!`.
@@ -124,11 +133,13 @@ The one-based configuration index for accessing the result of `compute!`.
 ```julia
 idx1 = add_config!(proj, 48, 0.1, ["T1-","A2-"], [5,1])
 idx2 = add_config!(proj, 64, 0.08, ["T1-"], [3])
+idx3 = add_config!(proj, 48, 0.1, ["T1-"], [3]; m_pi=140.0)
 ```
 Configurations with the same `(L,a)` automatically share a geometry cache in `compute!`; no manual cache management is required.
 """
 function add_config!(proj::Project, L::Int, a::Real,
-                     irreps::Vector{String}, n_levels::Vector{Int})
+                     irreps::Vector{String}, n_levels::Vector{Int};
+                     m_pi=_MPI_NOT_PROVIDED)
     L > 0 || throw(ArgumentError("L must be > 0, got $L"))
     a > 0 || throw(ArgumentError("a must be > 0, got $a"))
     length(irreps) == length(n_levels) ||
@@ -146,7 +157,14 @@ function add_config!(proj::Project, L::Int, a::Real,
         valid || throw(ArgumentError("invalid irreducible representation: $Γ"))
     end
 
-    push!(proj.configs, Config(L, Float64(a), irreps, n_levels))
+    stored_m_pi = if m_pi === _MPI_NOT_PROVIDED
+        nothing
+    elseif m_pi === nothing
+        throw(ArgumentError("omit the m_pi keyword for a legacy config; m_pi=nothing is not allowed"))
+    else
+        Float64(m_pi)
+    end
+    push!(proj.configs, Config(L, Float64(a), irreps, n_levels, stored_m_pi))
     return length(proj.configs)
 end
 
@@ -329,6 +347,28 @@ function prepare_spectrum(proj::Project; backend::Symbol=:factorized)
     return PreparedSpectrumProject(prepared_project, backend, groups)
 end
 
+function _compute_prepared_config!(basis::SystemBasis, cfg::Config,
+                                   backend::Symbol, decomposition)
+    n_levels = Dict(cfg.irreps[i] => cfg.n_levels[i]
+                    for i in eachindex(cfg.irreps))
+    if backend == :projected_blocks
+        solver = compute_spectrum_eigs
+    elseif backend == :factorized
+        solver = compute_spectrum_factorized
+    else
+        solver = compute_spectrum
+    end
+    if decomposition === nothing
+        return solver(basis; n_levels=n_levels)
+    end
+    spectra, eigenvectors = solver(basis; n_levels=n_levels,
+                                   return_vectors=true)
+    for (irrep, vectors) in eigenvectors
+        decomposition[irrep] = channel_decomposition(basis, irrep, vectors)
+    end
+    return spectra
+end
+
 """
     compute!(prepared::PreparedSpectrumProject, V_func, params; kwargs...)
 
@@ -363,47 +403,9 @@ function compute!(prepared::PreparedSpectrumProject, V_func, params;
 
         for idx in config_indices
             cfg = proj.configs[idx]
-            n_levels = Dict(cfg.irreps[i] => cfg.n_levels[i]
-                            for i in eachindex(cfg.irreps))
-            if prepared.backend == :projected_blocks
-                if channel_decomp
-                    evals, evecs = compute_spectrum_eigs(
-                        basis; n_levels=n_levels, return_vectors=true)
-                    spectra[idx] = evals
-                    for (Gamma, vectors) in evecs
-                        decomp[idx][Gamma] =
-                            channel_decomposition(basis, Gamma, vectors)
-                    end
-                else
-                    spectra[idx] = compute_spectrum_eigs(
-                        basis; n_levels=n_levels)
-                end
-            elseif prepared.backend == :factorized
-                if channel_decomp
-                    evals, evecs = compute_spectrum_factorized(
-                        basis; n_levels=n_levels, return_vectors=true)
-                    spectra[idx] = evals
-                    for (Gamma, vectors) in evecs
-                        decomp[idx][Gamma] =
-                            channel_decomposition(basis, Gamma, vectors)
-                    end
-                else
-                    spectra[idx] = compute_spectrum_factorized(
-                        basis; n_levels=n_levels)
-                end
-            else
-                if channel_decomp
-                    evals, evecs = compute_spectrum(
-                        basis; n_levels=n_levels, return_vectors=true)
-                    spectra[idx] = evals
-                    for (Gamma, vectors) in evecs
-                        decomp[idx][Gamma] =
-                            channel_decomposition(basis, Gamma, vectors)
-                    end
-                else
-                    spectra[idx] = compute_spectrum(basis; n_levels=n_levels)
-                end
-            end
+            spectra[idx] = _compute_prepared_config!(
+                basis, cfg, prepared.backend,
+                channel_decomp ? decomp[idx] : nothing)
         end
     end
     info = _run_info(proj, params, V_func, prepared.backend,
@@ -432,7 +434,7 @@ end
 
 """
 Parameter-independent data for an affine interaction. Fields referenced by
-`dynamic_mass` are reserved for the kinetic energy and are not potential
+`mass_unfixed` (or its compatibility alias `dynamic_mass`) are reserved for the kinetic energy and are not potential
 coefficients.
 """
 struct AffinePreparedProject{P}
@@ -552,10 +554,10 @@ take their constant values from `params_template` and are absorbed into
 `V0`. One unit-vector probe is made only for each non-fixed potential
 parameter. Pass the same `fixed` setting to the fitting backend.
 
-In a rest-frame project, fields referenced by `dynamic_mass` are excluded from
+In a rest-frame project, fields referenced by `mass_unfixed` are excluded from
 the potential probes and are resolved afresh for the kinetic energy at every
 `compute!` call. This is a user contract: the potential must not read those
-fields. Moving-frame projects containing dynamic masses must use
+fields. Moving-frame projects containing unfixed masses must use
 [`prepare_spectrum`](@ref), because their boosted interaction kinematics also
 depend nonlinearly on the masses.
 
@@ -957,11 +959,15 @@ function compute!(proj::Project, V_func, params;
     return ProjectResult(info.project.configs, spectra, decomp, info)
 end
 
+function _write_parameter_info(io::IO, params)
+    println(io, "# parameter_type = ", typeof(params))
+    println(io, "# parameters = ", repr(params))
+end
+
 function _write_run_info(io::IO, info::ProjectRunInfo)
     proj = info.project
     println(io, "# NPHFforFVE spectrum")
-    println(io, "# parameter_type = ", typeof(info.params))
-    println(io, "# parameters = ", repr(info.params))
+    _write_parameter_info(io, info.params)
     println(io, "# total_momentum = ", Tuple(proj.d))
     println(io, "# total_isospin = ", proj.I)
     println(io, "# V_basis = ", proj.V_basis)
@@ -976,8 +982,8 @@ function _write_run_info(io::IO, info::ProjectRunInfo)
     end
     for (i, cfg) in enumerate(proj.configs)
         println(io, "# config[$i] = ", repr((
-            L=cfg.L, a=cfg.a, irreps=cfg.irreps,
-            n_levels=cfg.n_levels)))
+            L=cfg.L, a=cfg.a, m_pi=cfg.m_pi,
+            irreps=cfg.irreps, n_levels=cfg.n_levels)))
     end
 end
 
@@ -996,7 +1002,7 @@ function write_spectrum(result::ProjectResult, filename::AbstractString)
         else
             _write_run_info(io, result.run_info)
         end
-        println(io, "config\tL\ta_fm\tL_phys_fm\tirrep\tlevel\tenergy_MeV\tchannel_weights")
+        println(io, "config\tm_pi_MeV\tL\ta_fm\tL_phys_fm\tirrep\tlevel\tenergy_MeV\tchannel_weights")
         for config in eachindex(result.configs)
             cfg = result.configs[config]
             for irrep in sort!(collect(keys(result[config])))
@@ -1010,9 +1016,10 @@ function write_spectrum(result::ProjectResult, filename::AbstractString)
                     else
                         ""
                     end
-                    println(io, config, '\t', cfg.L, '\t', cfg.a, '\t',
-                            cfg.L * cfg.a, '\t', irrep, '\t', level, '\t',
-                            energy, '\t', weights)
+                    m_pi = cfg.m_pi === nothing ? "" : string(cfg.m_pi)
+                    println(io, config, '\t', m_pi, '\t',
+                            cfg.L, '\t', cfg.a, '\t', cfg.L * cfg.a, '\t',
+                            irrep, '\t', level, '\t', energy, '\t', weights)
                 end
             end
         end
@@ -1395,7 +1402,8 @@ function setup_project()
     end
     println("  Number of configurations: $(length(proj.configs))")
     for (i, cfg) in enumerate(proj.configs)
-        println("    #$i: L=$(cfg.L), a=$(cfg.a), Γ=$(join(cfg.irreps, ","))")
+        m_pi = cfg.m_pi === nothing ? "" : ", m_pi=$(cfg.m_pi) MeV"
+        println("    #$i: L=$(cfg.L), a=$(cfg.a)$m_pi, Γ=$(join(cfg.irreps, ","))")
     end
     println("="^56)
     println("\nNext step: result = compute!(proj, V_func, params)")
@@ -1512,7 +1520,8 @@ function generate_potential_template(proj::Project, output_file::String="potenti
         println(io, "#   ch $i: \"$(ch.name)\" N=$(ch.N) species=$(ch.species)")
     end
     for (i, cfg) in enumerate(proj.configs)
-        println(io, "#   config $i: L=$(cfg.L), a=$(cfg.a), Γ=$(join(cfg.irreps, ","))")
+        m_pi = cfg.m_pi === nothing ? "" : ", m_pi=$(cfg.m_pi) MeV"
+        println(io, "#   config $i: L=$(cfg.L), a=$(cfg.a)$m_pi, Γ=$(join(cfg.irreps, ","))")
     end
     if !isempty(proj.exclude_subchannels)
         println(io, "#   Excluded isospin subchannels:")

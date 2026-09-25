@@ -1,0 +1,25 @@
+# NPHFforFVE spectrum
+# parameter_type = Vector{RhoPipiParams}
+# parameters = RhoPipiParams[RhoPipiParams(800.0, 208.0, 1.8e-5, 0.2e-5, 900.0), RhoPipiParams(900.0, 305.0, 3.0e-5, 0.2e-5, 900.0)]
+# pion_mass_factor = 140^2 / (140^2 + (m_pi - 140)^2)
+# vertex_coupling = g + h * p^2 / 500^2
+# total_momentum = (0, 0, 0)
+# total_isospin = 1//1
+# V_basis = canonical
+# Ncuts = [0, 15]
+# channel_decomp = false
+# channel[1] = (name = "rho", species = [1], particle_types = [:boson], masses = Union{Float64, DynamicMass}[mass_unfixed(:m_rho)], spins = Rational{Int64}[1], isospins = Rational{Int64}[1], etas = [-1.0], kinetic_type = relativistic)
+# channel[2] = (name = "pipi", species = [2], particle_types = [:boson], masses = Union{Float64, DynamicMass}[mass_unfixed(:m_pi)], spins = Rational{Int64}[0], isospins = Rational{Int64}[1], etas = [1.0], kinetic_type = relativistic)
+# config[1] = (L = 32, a = 0.1, m_pi = 208.0, irreps = ["T1-"], n_levels = [5])
+# config[2] = (L = 48, a = 0.1, m_pi = 305.0, irreps = ["T1-"], n_levels = [5])
+config	m_pi_MeV	L	a_fm	L_phys_fm	irrep	level	energy_MeV	channel_weights
+1	208.0	32	0.1	3.2	T1-	1	789.6591105607376	
+1	208.0	32	0.1	3.2	T1-	2	882.3090314943277	
+1	208.0	32	0.1	3.2	T1-	3	1173.8614610679197	
+1	208.0	32	0.1	3.2	T1-	4	1405.8676883466112	
+1	208.0	32	0.1	3.2	T1-	5	1605.0417690641636	
+2	305.0	48	0.1	4.800000000000001	T1-	1	799.0250450345955	
+2	305.0	48	0.1	4.800000000000001	T1-	2	895.2214785458841	
+2	305.0	48	0.1	4.800000000000001	T1-	3	953.5277941293587	
+2	305.0	48	0.1	4.800000000000001	T1-	4	1083.3511009167692	
+2	305.0	48	0.1	4.800000000000001	T1-	5	1200.0442739510295	

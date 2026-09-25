@@ -10,7 +10,7 @@ export get_N, get_num_species, get_total_N
 export get_isospin_subchannels
 export SubchannelExclusion
 export KineticType, relativistic, nonrelativistic
-export DynamicMass, dynamic_mass, has_dynamic_mass
+export DynamicMass, mass_unfixed, dynamic_mass, has_dynamic_mass
 export resolve_mass, resolve_masses, resolve_particle_masses
 
 # ============ Kinetic-energy dispersion ============
@@ -42,15 +42,18 @@ struct DynamicMass
 end
 
 """
-    dynamic_mass(name::Symbol) -> DynamicMass
+    mass_unfixed(name::Symbol) -> DynamicMass
 
-Mark a `FockChannel` mass as dynamic. Every spectrum evaluation resolves it
+Mark a `FockChannel` mass as unfixed. Every spectrum evaluation resolves it
 from the field `params.<name>`.
 """
-dynamic_mass(name::Symbol) = DynamicMass(name)
+mass_unfixed(name::Symbol) = DynamicMass(name)
+
+"""Compatibility alias for `mass_unfixed`."""
+dynamic_mass(name::Symbol) = mass_unfixed(name)
 
 function Base.show(io::IO, mass::DynamicMass)
-    print(io, "dynamic_mass(", repr(mass.name), ")")
+    print(io, "mass_unfixed(", repr(mass.name), ")")
 end
 
 const MassSpec = Union{Float64,DynamicMass}
@@ -77,7 +80,7 @@ A single Fock channel. The total isospin `I` is global and stored in `FockSystem
 - `name::String`: channel name, for example `\"ππN\"`
 - `species::Vector{Int}`: particle count for each species
 - `particle_types::Vector{Symbol}`: particle type for each species (`:boson` or `:fermion`)
-- `masses`: mass of each species in MeV; use a positive real number for a fixed mass or `dynamic_mass(:parameter_name)` for a dynamic mass
+- `masses`: mass of each species in MeV; use a positive real number for a fixed mass or `mass_unfixed(:parameter_name)` for an unfixed mass (`dynamic_mass` remains supported as a compatibility alias)
 - `spins::Vector{Rational{Int}}`: spin `j` of each species
 - `isospins::Vector{Rational{Int}}`: isospin `j` of each species
 """

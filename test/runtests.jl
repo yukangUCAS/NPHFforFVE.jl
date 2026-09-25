@@ -27,3 +27,5 @@ for filename in PHYSICS_TESTS
     test_module = Module(module_name)
     Base.include(test_module, joinpath(@__DIR__, "physics", filename))
 end
+
+Base.include(Module(:MultiMpiFitTest), joinpath(@__DIR__, "test_multi_mpi_fit.jl"))

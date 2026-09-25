@@ -40,6 +40,7 @@ NPHFforFVE.jl is a Julia package for computing finite-volume spectra of $N$-body
   - [Complete example: three-coupled-channel Roper spectrum and fit](#complete-example-three-coupled-channel-roper-spectrum-and-fit)
     - [1. Computing the spectrum](#1-computing-the-spectrum)
     - [2. Parameter fitting](#2-parameter-fitting)
+  - [Complete example 2: fitting rho-pipi spectra at two pion masses](#complete-example-2-fitting-rho-pipi-spectra-at-two-pion-masses)
   - [Physics regression tests](#physics-regression-tests)
   - [License](#license)
 
@@ -852,6 +853,110 @@ The complete code is in [fit_affine.jl](examples/roper/fit_affine.jl).
 
 ```bash
 julia --project=. examples/roper/fit_affine.jl
+```
+
+## Complete example 2: fitting rho-pipi spectra at two pion masses
+
+The [rho_multi_mpi example](examples/rho_multi_mpi/fit_affine.jl) fits five rest-frame `T1-` levels at each of two pion masses. Its interaction and `RhoPipiParams` type are in [potential_defs.jl](examples/rho_multi_mpi/potential_defs.jl); the pseudodata are in [pseudodata.tsv](examples/rho_multi_mpi/pseudodata.tsv).
+
+Explanation for the essential steps are made as follows.
+
+
+To begin with, the `FockChannel` and `add_config` are defined slightly differently,
+
+```julia
+rho = FockChannel("rho", [1], [:boson], [dynamic_mass(:m_rho)],
+                  [1//1], [1//1], [-1.0], relativistic)
+pipi = FockChannel("pipi", [2], [:boson], [mass_unfixed(:m_pi)],
+                   [0//1], [1//1], [1.0], relativistic)
+
+# Note the mass_unfixed(:m_pi), for its value differs from configs with different quark masses.
+
+
+project = Project(D000, 1//1, [rho, pipi], [0, 15])
+
+
+add_config!(project, 32, 0.1, ["T1-"], [5]; m_pi=208.0)
+add_config!(project, 48, 0.1, ["T1-"], [5]; m_pi=305.0)
+# Note the additional keyword `m_pi=`.
+```
+
+For a single calculation at fixed (L, a, m_π), the potential evaluates with `RhoPipiParams(m_rho, g, h, ...)` as defined in `potential_defs.jl`. When performing a joint fit across multiple m_π, a different parameterization is typically required: `FitParams` stores the global coordinates varied by the optimizer. For example, assuming m_ρ = c₀ + c₁ * m_π² and an m_π-dependent g, the actual fit parameters are c₀, c₁, and g at each m_π.
+
+```julia
+@params struct FitParams
+    c0 = 720.0
+    c1 = 0.0
+    g_208 = 1.7e-5
+    g_305 = 2.7e-5
+    h = 0.1e-5
+end
+
+#
+g_Dict = Dict(208.0 => :g_208, 305.0 => :g_305)
+
+
+# `ParaMpiDependence` maps `FitParams` into `RhoPipiParams` (the actual parameters used to construct the Hamiltonian). It categorizes parameters into four distinct types.
+#
+# NOTE: Every parameter in `RhoPipiParams` must be declared in `ParaMpiDependence`.
+
+dependence = ParaMpiDependence(
+    # shared_fit: Fit parameters shared across different lattice configurations.
+    shared_fit=(:h,),
+
+    # dependent_fit: Fit parameters that vary across configurations.
+        #   - `depends_on`: Maps `FitParams` into target parameters via a user-defined rule.
+    dependent_fit=(
+        m_rho=depends_on((:c0, :c1),
+            (config, fit_params) -> fit_params.c0 + fit_params.c1 * config.m_pi^2),
+        g=depends_on((:g_208, :g_305),
+            (config, fit_params) -> getproperty(fit_params, g_Dict[config.m_pi])),
+    ),
+
+    # known: Known, configuration-dependent inputs (e.g., pion decay constant).
+    # NOTE: All `mass_unfixed` fields in `FockChannel` (except bare masses) must be declared here, as they are m_π-dependent.
+    # Example (e.g., nucleon mass): m_N = known_from(config -> m_N_Dict[config.m_pi]) where `m_N_Dict = Dict(208.0 => val_1, 305.0 => val_2)`.
+    known=(m_pi=known_from(config -> config.m_pi),),
+
+    # fixed: Hyperparameters that are constant across all configurations and fixed during fitting.
+    fixed=(cutoff=900.0,),
+)
+
+
+initial_val = FitParams()
+
+# `ParamMapping` binds the dependency rules and maps `initial_val` to `RhoPipiParams`.
+#  Any default values defined in `RhoPipiParams` are actually bypassed in the fitting.
+pmap = ParamMapping(RhoPipiParams, dependence, initial_val)
+
+```
+
+... The full script reads energies from pseudodata.tsv. We skip this part here ...
+
+
+```julia
+
+
+data = SpectrumDataset([
+    SpectrumGroup(i, "T1-", energies[i]; errors=fill(0.5, 5))
+    for i in eachindex(energies)
+])
+
+# Note the additional `pmap` argument passed here.
+prepared = prepare_affine(project, my_V, pmap;
+                          backend=:projected_blocks,
+                          channel_filter=channel_filter)
+
+
+problem = SpectrumFitProblem(prepared, initial_val, data)
+
+
+fit = minuit(problem; initial_steps=initial_steps,
+             limits=(g_208=(0.0, Inf), g_305=(0.0, Inf)))
+migrad!(fit; maxfcn=3000)  # minimize chi-squared
+
+fitted_params = best_params(problem, fit)  # return FitParams
+fitted_spectrum = compute!(prepared, fitted_params)
 ```
 
 

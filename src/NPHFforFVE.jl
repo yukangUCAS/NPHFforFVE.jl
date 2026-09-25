@@ -329,13 +329,13 @@ using .FockSpace: FockChannel, FockSystem, setup_fock_system, SubchannelExclusio
 using .FockSpace: get_N, get_num_species, get_total_N, get_Ncut, get_isospin_subchannels
 using .FockSpace: _is_subchannel_excluded, _active_subchannels
 using .FockSpace: KineticType, relativistic, nonrelativistic
-using .FockSpace: DynamicMass, dynamic_mass, has_dynamic_mass
+using .FockSpace: DynamicMass, mass_unfixed, dynamic_mass, has_dynamic_mass
 using .FockSpace: resolve_mass, resolve_masses, resolve_particle_masses
 export FockChannel, FockSystem, setup_fock_system
 export SubchannelExclusion
 export get_N, get_num_species, get_total_N, get_Ncut, get_isospin_subchannels
 export KineticType, relativistic, nonrelativistic
-export DynamicMass, dynamic_mass, has_dynamic_mass
+export DynamicMass, mass_unfixed, dynamic_mass, has_dynamic_mass
 export resolve_mass, resolve_masses, resolve_particle_masses
 
 const ħc = 197.327  # MeV·fm
@@ -360,6 +360,8 @@ include("CacheManagement.jl")
 export cache_info, clear_caches!
 
 include("UserAPI.jl")
+include("ConfigParams.jl")
+export depends_on, known_from, ParaMpiDependence, ParamMapping, resolve_params
 export Project, Config, add_config!, exclude_subchannel!, include_subchannel!
 export ProjectRunInfo, ProjectResult, compute!, write_spectrum, setup_project
 export PreparedSpectrumProject, prepare_spectrum
