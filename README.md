@@ -454,6 +454,8 @@ result[i]                 # dictionary of spectra for all irreducible representa
 result[i]["A1+"]           # energy levels in A1+, ordered from low to high energy
 ```
 
+For `d != D000`, the returned levels are moving-frame energies $E_{\mathrm{moving}}=\sqrt{E_{\mathrm{cm}}^2+\mathbf{P}^2}$.
+
 This uses the default backend `:complete_matrix`. For more complex large-matrix problems, `compute!` can also use matrix-free backends such as projected blocks or factorized. See the next section for details.
 
 ### Fock-channel decomposition
@@ -746,6 +748,19 @@ m.errors      # Parameter uncertainties from HESSE
 m.covariance  # Parameter covariance matrix
 ```
 
+To fit spectra from different reference frames together, create a separate `Project`, dataset, and fitting problem for each frame, then combine the problems.
+
+```julia
+initial = MyParams()
+
+problem_rest = SpectrumFitProblem(prepared_rest, my_V_rest, initial, data_rest)
+problem_moving = SpectrumFitProblem(prepared_moving, my_V_moving, initial, data_moving)
+
+problem = SpectrumFitProblem([problem_rest, problem_moving])
+m = minuit(problem)
+migrad!(m)
+```
+
 
 
 ### 3. An accelerated fitting path for a common case
@@ -857,7 +872,7 @@ julia --project=. examples/roper/fit_affine.jl
 
 ## Complete example 2: fitting rho-pipi spectra at two pion masses
 
-The [rho_multi_mpi example](examples/rho_multi_mpi/fit_affine.jl) fits five rest-frame `T1-` levels at each of two pion masses. Its interaction and `RhoPipiParams` type are in [potential_defs.jl](examples/rho_multi_mpi/potential_defs.jl); the pseudodata are in [pseudodata.tsv](examples/rho_multi_mpi/pseudodata.tsv).
+The [rho_multi_mpi example](examples/rho_multi_mpi/fit_affine.jl) jointly fits five rest-frame `T1-` levels at each of two pion masses and two moving-frame `D001/A1` levels at `m_pi=208 MeV`. Its rest-frame interaction and `RhoPipiParams` type are in [potential_defs.jl](examples/rho_multi_mpi/potential_defs.jl), and its moving-frame interaction is in [potential_moving_defs.jl](examples/rho_multi_mpi/potential_moving_defs.jl). The pseudodata are in [pseudodata.tsv](examples/rho_multi_mpi/pseudodata.tsv) and [pseudodata_moving.tsv](examples/rho_multi_mpi/pseudodata_moving.tsv).
 
 Explanation for the essential steps are made as follows.
 
@@ -879,6 +894,10 @@ project = Project(D000, 1//1, [rho, pipi], [0, 15])
 add_config!(project, 32, 0.1, ["T1-"], [5]; m_pi=208.0)
 add_config!(project, 48, 0.1, ["T1-"], [5]; m_pi=305.0)
 # Note the additional keyword `m_pi=`.
+
+# A separate project for the moving frame.
+moving_project = Project(D001, 1//1, [rho, pipi], [0, 15])
+add_config!(moving_project, 32, 0.1, ["A1"], [2]; m_pi=208.0)
 ```
 
 For a single calculation at fixed (L, a, m_π), the potential evaluates with `RhoPipiParams(m_rho, g, h, ...)` as defined in `potential_defs.jl`. When performing a joint fit across multiple m_π, a different parameterization is typically required: `FitParams` stores the global coordinates varied by the optimizer. For example, assuming m_ρ = c₀ + c₁ * m_π² and an m_π-dependent g, the actual fit parameters are c₀, c₁, and g at each m_π.
@@ -931,7 +950,7 @@ pmap = ParamMapping(RhoPipiParams, dependence, initial_val)
 
 ```
 
-... The full script reads energies from pseudodata.tsv. We skip this part here ...
+... The full script reads `energies` from `pseudodata.tsv` and `moving_energies` from `pseudodata_moving.tsv`. We skip this part here ...
 
 
 ```julia
@@ -942,13 +961,24 @@ data = SpectrumDataset([
     for i in eachindex(energies)
 ])
 
+# Config 1 here belongs to moving_project.
+moving_data = SpectrumDataset([
+    SpectrumGroup(1, "A1", moving_energies[1]; errors=fill(0.5, 2)),
+])
+
 # Note the additional `pmap` argument passed here.
 prepared = prepare_affine(project, my_V, pmap;
                           backend=:projected_blocks,
                           channel_filter=channel_filter)
 
 
-problem = SpectrumFitProblem(prepared, initial_val, data)
+problem_rest = SpectrumFitProblem(prepared, initial_val, data)
+
+# Masses enter the boost, so the moving frame uses prepare_spectrum.
+prepared_moving = prepare_spectrum(moving_project; backend=:projected_blocks)
+problem_moving = SpectrumFitProblem(prepared_moving, my_V_moving, pmap, moving_data)
+
+problem = SpectrumFitProblem([problem_rest, problem_moving])
 
 
 fit = minuit(problem; initial_steps=initial_steps,
@@ -956,7 +986,11 @@ fit = minuit(problem; initial_steps=initial_steps,
 migrad!(fit; maxfcn=3000)  # minimize chi-squared
 
 fitted_params = best_params(problem, fit)  # return FitParams
-fitted_spectrum = compute!(prepared, fitted_params)
+fitted_spectra = problem.evaluator(fitted_params)
+
+# Results follow the order [problem_rest, problem_moving].
+fitted_spectra[1][1]["T1-"]  # rest-frame config 1
+fitted_spectra[2][1]["A1"]   # moving-frame config 1
 ```
 
 

@@ -1276,6 +1276,36 @@ function SpectrumFitProblem(prepared::AffinePreparedProject{P},
     return SpectrumFitProblem(evaluator, initial_params, data, loss, names)
 end
 
+"""
+    SpectrumFitProblem(problems::AbstractVector{<:SpectrumFitProblem})
+
+Combine independent fitting problems using the same fit parameters. Parameter
+types, names, and initial values must match. Each problem keeps its own project
+and dataset, so config indices remain local to that problem. The joint loss is
+the sum of the individual losses; cross-dataset covariance is not included.
+The evaluator returns individual results in the input order.
+"""
+function SpectrumFitProblem(problems::AbstractVector{<:SpectrumFitProblem})
+    isempty(problems) && throw(ArgumentError("provide at least one fitting problem"))
+    parts = collect(problems)
+    initial = first(parts).initial_params
+    names = first(parts).parameter_names
+    initial_values = to_vector(initial)
+    for (index, part) in enumerate(parts)
+        typeof(part.initial_params) === typeof(initial) || throw(ArgumentError(
+            "problem $index has a different fit parameter type"))
+        part.parameter_names == names || throw(ArgumentError(
+            "problem $index has different fit parameter names"))
+        to_vector(part.initial_params) == initial_values || throw(ArgumentError(
+            "problem $index has different initial fit parameter values"))
+    end
+    evaluator = params -> [part.evaluator(params) for part in parts]
+    loss = (results, params) -> sum(
+        part.loss(result, params) for (part, result) in zip(parts, results))
+    return SpectrumFitProblem(evaluator, initial,
+                              [part.data for part in parts], loss, copy(names))
+end
+
 function (problem::SpectrumFitProblem)(x::AbstractVector)
     length(x) == length(problem.parameter_names) || throw(DimensionMismatch(
         "fit vector has length $(length(x)); expected " *

@@ -888,6 +888,10 @@ function compute_spectrum_eigs(basis::SystemBasis;
 
         if isempty(v_blocks)
             ev = sort(T_diag)[1:min(n_g, dim)]
+            if basis.sys.d != D000
+                P_mag = (2π * ħc / basis.L_phys) * sqrt(Float64(sum(abs2, basis.sys.d)))
+                ev = sqrt.(ev.^2 .+ P_mag^2)
+            end
             result[Gamma] = ev
             if return_vectors
                 vecs[Gamma] = Matrix(Diagonal(ones(ComplexF64, length(ev))))
@@ -1040,6 +1044,10 @@ function compute_spectrum_factorized(
         if isempty(H_op.interactions)
             perm = sortperm(H_op.T_diag)[1:n_ev]
             result[Gamma] = H_op.T_diag[perm]
+            if basis.sys.d != D000
+                P_mag = (2π * ħc / basis.L_phys) * sqrt(Float64(sum(abs2, basis.sys.d)))
+                result[Gamma] = sqrt.(result[Gamma].^2 .+ P_mag^2)
+            end
             if return_vectors
                 V = zeros(ComplexF64, dim, n_ev)
                 for (j, i) in enumerate(perm)

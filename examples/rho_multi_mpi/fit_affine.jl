@@ -1,7 +1,8 @@
-# Multi-m_pi affine fit. Set NPHF_RUN_FIT=1 to start fitting.
+# Joint rest- and moving-frame multi-m_pi fit. Set NPHF_RUN_FIT=1 to fit.
 using NPHFforFVE
 
 include(joinpath(@__DIR__, "potential_defs.jl"))
+include(joinpath(@__DIR__, "potential_moving_defs.jl"))
 
 # Rest-frame rho-pipi project; masses are resolved per config.
 rho = FockChannel(
@@ -15,23 +16,34 @@ project = Project(D000, 1//1, [rho, pipi], [0, 15])
 add_config!(project, 32, 0.1, ["T1-"], [5]; m_pi=208.0)
 add_config!(project, 48, 0.1, ["T1-"], [5]; m_pi=305.0)
 
-# Read the five T1- levels per config from the recorded pseudo-data.
-energies = [Float64[] for _ in project.configs]
-for line in eachline(joinpath(@__DIR__, "pseudodata.tsv"))
-    (isempty(line) || startswith(line, '#') || startswith(line, "config\t")) && continue
-    columns = split(line, '\t')
-    config_index = parse(Int, columns[1])
-    level = parse(Int, columns[7])
-    level == length(energies[config_index]) + 1 ||
-        error("pseudodata.tsv levels must be ordered within each config")
-    push!(energies[config_index], parse(Float64, columns[8]))
+moving_project = Project(D001, 1//1, [rho, pipi], [0, 15])
+add_config!(moving_project, 32, 0.1, ["A1"], [2]; m_pi=208.0)
+
+# Each file uses config indices local to its own project.
+function read_pseudodata(filename, n_configs)
+    energies = [Float64[] for _ in 1:n_configs]
+    for line in eachline(joinpath(@__DIR__, filename))
+        (isempty(line) || startswith(line, '#') || startswith(line, "config\t")) && continue
+        columns = split(line, '\t')
+        config_index = parse(Int, columns[1])
+        level = parse(Int, columns[7])
+        level == length(energies[config_index]) + 1 ||
+            error("$filename levels must be ordered within each config")
+        push!(energies[config_index], parse(Float64, columns[8]))
+    end
+    return energies
 end
+energies = read_pseudodata("pseudodata.tsv", length(project.configs))
+moving_energies = read_pseudodata("pseudodata_moving.tsv", length(moving_project.configs))
 
 # The TSV has no uncertainties; assign 0.5 MeV to each pseudo-data level.
 pseudo_error = 0.5  # MeV
 data = SpectrumDataset([
     SpectrumGroup(i, "T1-", energies[i]; errors=fill(pseudo_error, 5))
     for i in eachindex(energies)
+])
+moving_data = SpectrumDataset([
+    SpectrumGroup(1, "A1", moving_energies[1]; errors=fill(pseudo_error, 2)),
 ])
 
 @params struct FitParams
@@ -62,7 +74,12 @@ pmap = ParamMapping(RhoPipiParams, dependence, initial_val)
 prepared = prepare_affine(project, my_V, pmap;
                           backend=:projected_blocks,
                           channel_filter=channel_filter)
-problem = SpectrumFitProblem(prepared, initial_val, data)
+problem_rest = SpectrumFitProblem(prepared, initial_val, data)
+
+# Masses enter the moving-frame boost, so use general spectrum preparation.
+prepared_moving = prepare_spectrum(moving_project; backend=:projected_blocks)
+problem_moving = SpectrumFitProblem(prepared_moving, my_V_moving, pmap, moving_data)
+problem = SpectrumFitProblem([problem_rest, problem_moving])
 
 run_fit = get(ENV, "NPHF_RUN_FIT", "0") == "1"
 if run_fit
@@ -76,11 +93,12 @@ if run_fit
     migrad!(fit; maxfcn=3000)
 
     fitted_params = best_params(problem, fit)
-    fitted_spectrum = compute!(prepared, fitted_params)
+    fitted_spectra = problem.evaluator(fitted_params)
     println("valid: ", fit.valid)
     println("chi²: ", fit.fval)
     println("best-fit parameters: ", fitted_params)
     for config_index in eachindex(project.configs)
-        println("config ", config_index, " T1-: ", fitted_spectrum[config_index]["T1-"])
+        println("rest config ", config_index, " T1-: ", fitted_spectra[1][config_index]["T1-"])
     end
+    println("moving config 1 A1: ", fitted_spectra[2][1]["A1"])
 end

@@ -29,3 +29,5 @@ for filename in PHYSICS_TESTS
 end
 
 Base.include(Module(:MultiMpiFitTest), joinpath(@__DIR__, "test_multi_mpi_fit.jl"))
+Base.include(Module(:MovingFreeBackendTest), joinpath(@__DIR__, "test_moving_free_backends.jl"))
+Base.include(Module(:JointFitTest), joinpath(@__DIR__, "test_joint_fit.jl"))

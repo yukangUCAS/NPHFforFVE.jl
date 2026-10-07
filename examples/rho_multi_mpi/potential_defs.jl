@@ -45,6 +45,13 @@ end
            (m_pi_physical^2 + (m_pi - m_pi_physical)^2)
 end
 
+@inline function rho_pipi_vertex(spin::Int, momentum, params::RhoPipiParams)
+    momentum_scale = 500.0  # MeV; distinct from the dipole cutoff
+    coupling = params.g + params.h * sum(abs2, momentum) / momentum_scale^2
+    return coupling * rho_pipi_polynomial(spin, momentum) *
+           pion_mass_factor(params.m_pi) * dipole_shape(momentum, params.cutoff)
+end
+
 # ============ Interaction Matrix Elements ============
 #
 # Signature:
@@ -107,10 +114,7 @@ function my_V(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys,
     # ── rho ← pipi ──
     elseif chA == 1 && chB == 2
         relative_momentum = pB[1]
-        momentum_scale = 500.0  # MeV; distinct from the dipole cutoff
-        coupling = params.g + params.h * sum(abs2, relative_momentum) / momentum_scale^2
-        vertex = coupling * rho_pipi_polynomial(Int(sp[1]), relative_momentum) *
-                pion_mass_factor(params.m_pi) * dipole_shape(relative_momentum, params.cutoff)
+        vertex = rho_pipi_vertex(Int(sp[1]), relative_momentum, params)
         return ComplexF64(conj(vertex))
 
     # ── pipi ← rho  (Hermitian conjugate of 1←2) ──
