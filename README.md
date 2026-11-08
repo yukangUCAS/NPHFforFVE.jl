@@ -400,6 +400,19 @@ The generated template performs this conversion automatically.
 
 The user only needs to replace the `TODO` in each branch with the appropriate matrix element. When either $\kappa_A$ or $\kappa_B$ is greater than 1, the interaction must return a $\dim(\kappa_A)\times\dim(\kappa_B)$ matrix. A size mismatch raises `DimensionMismatch`.
 
+
+** WARNING!!! ** :  If an interaction proceeds through a spectator-particle mechanism, users must manually replace every infinite-volume delta function in their interaction matrix elements by
+
+$$
+\delta^{(3)}(\mathbf p-\mathbf p')
+\;\longrightarrow\;
+\delta_{\mathbf n,\mathbf n'}
+\left(\frac{L_{\mathrm{phys}}}{2\pi\hbar c}\right)^3.
+$$
+
+Apply this replacement separately to every spectator delta function; the package does not perform it automatically.
+
+
 ### 2. Helicity basis
 
 When `V_basis=:helicity` is specified in `Project`, the generated template uses `my_V_hel` and replaces the canonical-spin arguments `sp` and `s` with helicity arguments `lamA` and `lamB`:
