@@ -1614,7 +1614,7 @@ function generate_potential_template(proj::Project, output_file::String="potenti
         println(io, "#")
         println(io, "# Return the dim(κA) × dim(κB) interaction block; a scalar is allowed when both dimensions are 1.")
         println(io, "#")
-        println(io, "# Hermiticity: my_V(nA,nB,...,chA,chB,...) = conj(my_V(nB,nA,...,chB,chA,...)).")
+        println(io, "# Hermiticity: V_AB = V_BA† (scalar blocks: complex conjugate).")
     else
         println(io, "#   my_V_hel(nA, nB, lamA, lamB, kapA, kapB, rA, rB, chA, chB, L_phys, params)")
         println(io, "#")
@@ -1629,8 +1629,8 @@ function generate_potential_template(proj::Project, output_file::String="potenti
         println(io, "#   Return a dimA × dimB matrix (scalar if dimA=dimB=1) with")
         println(io, "#   the V matrix elements between the given isospin sub-channels.")
         println(io, "#")
-        println(io, "# IMPORTANT: V must be Hermitian: my_V_hel(nA, nB, ..., chA, chB, L_phys, params)")
-        println(io, "#            = conj(my_V_hel(nB, nA, ..., chB, chA, L_phys, params))")
+        println(io, "# IMPORTANT: V must be Hermitian: V_AB = V_BA†.")
+        println(io, "# Scalar blocks use complex conjugation.")
     end
     println(io)
 
@@ -2121,8 +2121,9 @@ function _write_hermitian_conj_body(io, α, β; V_basis::Symbol=:canonical)
     fname = V_basis == :helicity ? "my_V_hel" : "my_V"
     # For Hermitian conjugate: bra↔ket, so old lamB (ket) → new lamA (bra), old lamA (bra) → new lamB (ket)
     spin_args = V_basis == :helicity ? "lamB, lamA" : "s, sp"
-    println(io, "        # Hermitian conjugate: V(chB,chA) = conj(V(chA,chB))")
-    println(io, "        return conj($fname(nB, nA, $spin_args, kapB, kapA, rB, rA, chB, chA, L_phys, params))")
+    println(io, "        # Hermitian conjugate: V_BA = V_AB†.")
+    println(io, "        forward_block = $fname(nB, nA, $spin_args, kapB, kapA, rB, rA, chB, chA, L_phys, params)")
+    println(io, "        return forward_block isa AbstractMatrix ? adjoint(forward_block) : conj(forward_block)")
 end
 
 # ===== General branches (enumerate all κ, r, a combinations; do not enforce Wigner–Eckart). =====

@@ -115,7 +115,7 @@ function my_V(nA, nB, sp, s, kapA, kapB, rA, rB, chA, chB, L_phys,
     elseif chA == 1 && chB == 2
         relative_momentum = pB[1]
         vertex = rho_pipi_vertex(Int(sp[1]), relative_momentum, params)
-        return ComplexF64(conj(vertex))
+        return -ComplexF64(conj(vertex))
 
     # ── pipi ← rho  (Hermitian conjugate of 1←2) ──
     elseif chA == 2 && chB == 1

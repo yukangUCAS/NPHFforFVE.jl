@@ -589,7 +589,7 @@ function _fix_SN_signs!(cg::ChargeToIsospinCG{N}) where {N}
                         for (a_new_idx, a_new) in enumerate(a_keys)
                             new_coeff_dict = Dict{NTuple{N, Rational{Int}}, ComplexF64}()
                             for (a_old_idx, a_old) in enumerate(a_keys)
-                                factor = T[a_new_idx, a_old_idx]
+                                factor = T[a_old_idx, a_new_idx]
                                 if abs(factor) > 1e-10
                                     for (mc, coeff) in cg.coeffs[M][a_old]
                                         new_coeff_dict[mc] = get(new_coeff_dict, mc, zero(ComplexF64)) + factor * coeff
@@ -625,9 +625,10 @@ function charge_to_isospin_cg(N::Int, j::Union{Rational{Int},Int}, J::Union{Rati
     J_r = Rational{Int}(J)
     dim_irrep = get_SN_irrep_dim(N, irrep)
 
+    multiplicity == 1 || throw(ArgumentError(
+        "CG coefficients currently support only multiplicity=1; got $multiplicity"))
+
     if N == 2 && j_r == 3//2
-        multiplicity == 1 || throw(ArgumentError(
-            "N=2, j=3/2 has no multiplicity copy $multiplicity"))
         expected_irrep = J_r in (3//1, 1//1) ? "[2]" :
                          J_r in (2//1, 0//1) ? "[1,1]" : nothing
         expected_irrep === nothing && throw(ArgumentError(
@@ -814,13 +815,13 @@ function charge_to_isospin_cg(N::Int, j::Union{Rational{Int},Int}, J::Union{Rati
             ])
         elseif J_r == 1//1 && irrep == "[1,1]"
             return _build_cg_coeffs(Val(2), j_r, J_r, irrep, multiplicity, dim_irrep, [
-                ( 1//1, 1, [((m1, m0), -r2inv), ((m0, m1), r2inv)]),
+                ( 1//1, 1, [((m1, m0), r2inv), ((m0, m1), -r2inv)]),
                 ( 0//1, 1, [((mm1, m1), -r2inv), ((m1, mm1), r2inv)]),
                 (-1//1, 1, [((m0, mm1), r2inv), ((mm1, m0), -r2inv)]),
             ])
         elseif J_r == 0//1 && irrep == "[2]"
             return _build_cg_coeffs(Val(2), j_r, J_r, irrep, multiplicity, dim_irrep, [
-                (0//1, 1, [((m1, mm1), -r3inv), ((m0, m0), r3inv), ((mm1, m1), -r3inv)]),
+                (0//1, 1, [((m1, mm1), r3inv), ((m0, m0), -r3inv), ((mm1, m1), r3inv)]),
             ])
         else
             throw(ArgumentError("No such (J=$J_r, [κ]=$irrep) for N=2, j=1"))
